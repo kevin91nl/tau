@@ -201,6 +201,64 @@ export default function(pi: ExtensionAPI) {
     }
   });
 
+  pi.registerTool({
+    name: "TauLocateRead",
+    label: "Tau Locate Read",
+    description: "Compound deterministic tool: locate files by glob and read bounded content.",
+    parameters: Type.Object({
+      pattern: Type.String(),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      return textResult(runTau(["locate-read", String(params.pattern), "--cwd", cwd], cwd).text);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauMemoryPack",
+    label: "Tau Memory Pack",
+    description: "Pack scoped Tau memory into compact context.",
+    parameters: Type.Object({
+      scope: Type.Optional(Type.String()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args = ["memory-pack", "--scope", String(params.scope || "."), "--cwd", cwd];
+      return textResult(runTau(args, cwd).text);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauSecretScan",
+    label: "Tau Secret Scan",
+    description: "Scan project files for secret-like content before context capture.",
+    parameters: Type.Object({
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      return textResult(runTau(["secret-scan", "--cwd", cwd], cwd).text);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauReviewer",
+    label: "Tau Reviewer",
+    description: "Scan git diff for risky lines and record reviewer ROI.",
+    parameters: Type.Object({
+      cwd: Type.Optional(Type.String()),
+      staged: Type.Optional(Type.Boolean())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args = ["reviewer", "git-diff", "--cwd", cwd];
+      if (params.staged) args.push("--staged");
+      return textResult(runTau(args, cwd).text);
+    }
+  });
+
   pi.registerCommand("tau", {
     description: "Tau help",
     async run() {
@@ -217,6 +275,10 @@ export default function(pi: ExtensionAPI) {
         "- TauProposalApply: apply the latest proposal",
         "- TauProposalDiscard: discard the latest proposal",
         "- TauABRecord: record an A/B comparison result",
+        "- TauLocateRead: deterministic locate+read",
+        "- TauMemoryPack: compact scoped memory",
+        "- TauSecretScan: scan for secrets",
+        "- TauReviewer: scan diff and record ROI",
         "",
         `Package root: ${root}`
       ].join("\n"));

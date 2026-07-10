@@ -34,6 +34,10 @@ TauProposalLatest
 TauProposalApply
 TauProposalDiscard
 TauABRecord
+TauLocateRead
+TauMemoryPack
+TauSecretScan
+TauReviewer
 ```
 
 Or run the sidecar CLI:
@@ -68,4 +72,14 @@ python -m tau_cli.main proposal discard
 
 ```bash
 python -m tau_cli.main ab record --name pack_speed --baseline "10.0,12.0,11.0" --candidate "8.0,9.0,8.5"
+```
+
+### Compound/reviewer commands
+
+```bash
+python -m tau_cli.main locate-read README.md
+python -m tau_cli.main memory-pack --scope .
+python -m tau_cli.main secret-scan
+python -m tau_cli.main proposal-check
+python -m tau_cli.main reviewer git-diff
 ```

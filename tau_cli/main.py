@@ -11,12 +11,17 @@ from tau_core.ab import write_artifact
 from tau_core.config import PREFERRED_MODELS, TauConfig
 from tau_core.context import build_pack, find_root
 from tau_core.lmstudio import doctor as lm_doctor
+from tau_core.locate_read import locate_read
 from tau_core.memory import add_card, cards
+from tau_core.memory_pack import pack_memory
 from tau_core.metrics import Timer
 from tau_core.proposals import apply_proposal, create_proposal, discard_proposal, latest_proposal
+from tau_core.proposal_check import check_proposal
 from tau_core.resources import preflight
+from tau_core.secret_scan import scan_tree as secret_scan_tree
 from tau_core.state import append_jsonl, ensure_state, latest_run, run_id, write_json
 from tau_core.trace import event, read_events
+from tau_core.reviewer import scan_diff_file, scan_git_diff, record_roi
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -156,6 +161,54 @@ def cmd_ab_record(args: argparse.Namespace) -> int:
     obj = write_artifact(root, name=args.name, baseline=baseline, candidate=candidate, metric=args.metric)
     print(json.dumps(obj, indent=2))
     return 0
+
+
+def cmd_locate_read(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    cfg = TauConfig(base_url=args.base_url)
+    result = locate_read(root, args.pattern, cfg)
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def cmd_memory_pack(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    result = pack_memory(root, scope=args.scope, limit=args.limit)
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def cmd_secret_scan(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    result = secret_scan_tree(root, max_files=args.max_files)
+    print(json.dumps(result, indent=2))
+    return 0 if result["hit_count"] == 0 else 1
+
+
+def cmd_proposal_check(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    result = latest_proposal(root)
+    if not result:
+        print("No proposals found.", file=sys.stderr)
+        return 1
+    path, rec = result
+    check_result = check_proposal(rec)
+    print(json.dumps(check_result, indent=2))
+    return 0 if check_result["risk_level"] != "high" else 2
+
+
+def cmd_reviewer(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    if args.review_cmd == "diff":
+        result = scan_diff_file(Path(args.patch))
+    elif args.review_cmd == "git-diff":
+        result = scan_git_diff(root, staged=args.staged)
+    else:
+        print("Unknown reviewer subcommand.", file=sys.stderr)
+        return 1
+    roi = record_roi(root, "reviewer_scan", result)
+    print(json.dumps(roi, indent=2))
+    return 0 if result.get("risk_level") != "high" else 2
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -329,6 +382,38 @@ def parser() -> argparse.ArgumentParser:
     ar.add_argument("--candidate", required=True)
     ar.add_argument("--metric", default="time_to_acceptance_s")
 
+    # locate-read compound command
+    lr = sub.add_parser("locate-read")
+    add_common(lr)
+    lr.add_argument("pattern", help="Glob pattern to match files")
+
+    # memory-pack compound command
+    mp = sub.add_parser("memory-pack")
+    add_common(mp)
+    mp.add_argument("--scope", default=".")
+    mp.add_argument("--limit", type=int, default=8)
+
+    # secret-scan compound command
+    ss = sub.add_parser("secret-scan")
+    add_common(ss)
+    ss.add_argument("--max-files", type=int, default=200)
+
+    # proposal-check compound command
+    pc = sub.add_parser("proposal-check")
+    add_common(pc)
+
+    # reviewer command with subcommands
+    rv = sub.add_parser("reviewer")
+    rv_sub = rv.add_subparsers(dest="review_cmd", required=True)
+
+    rd = rv_sub.add_parser("diff")
+    add_common(rd)
+    rd.add_argument("--patch", required=True, help="Path to patch/diff file")
+
+    rg = rv_sub.add_parser("git-diff")
+    add_common(rg)
+    rg.add_argument("--staged", action="store_true")
+
     return p
 
 
@@ -368,6 +453,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "ab":
         if args.ab_cmd == "record":
             return cmd_ab_record(args)
+    if args.cmd == "locate-read":
+        return cmd_locate_read(args)
+    if args.cmd == "memory-pack":
+        return cmd_memory_pack(args)
+    if args.cmd == "secret-scan":
+        return cmd_secret_scan(args)
+    if args.cmd == "proposal-check":
+        return cmd_proposal_check(args)
+    if args.cmd == "reviewer":
+        return cmd_reviewer(args)
     return 2
 
 
