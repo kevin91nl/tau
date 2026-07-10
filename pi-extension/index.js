@@ -589,7 +589,7 @@ function recentMemories(cwd, limit = 3, bucket = "") {
   const seen = new Set();
   return readMemoryJsonl(cwd)
     .filter((row) => !row.bucket || row.bucket === bucket)
-    .map((row) => safeMemoryText(row.text))
+    .map((row) => row.auto ? compactAutoMemory(cwd, row.text) : safeMemoryText(row.text))
     .filter(Boolean)
     .filter((text) => {
       if (seen.has(text)) return false;
@@ -652,7 +652,7 @@ function normalizeMacSed(command, platform = process.platform) {
 
 function appendAutoReflection(active) {
   if (!active.accepted || active.ambiguity || active.errors.length || !active.files.size) return;
-  const files = [...active.files].slice(0, 3);
+  const files = [...active.files].slice(0, 3).map((path) => projectRelativePath(active.cwd, path));
   const text = `Recent completed navigation for ${active.bucket}: start with ${files.join(", ")} when relevant.`;
   if (recentMemories(active.cwd, Number.MAX_SAFE_INTEGER, active.bucket).includes(text)) return;
   appendJsonl(active.cwd, MEMORIES, {
@@ -661,6 +661,20 @@ function appendAutoReflection(active) {
     bucket: active.bucket,
     text,
   });
+}
+
+function projectRelativePath(cwd, path) {
+  const base = `${String(cwd || "").replace(/\/$/, "")}/`;
+  const value = String(path || "");
+  return value.startsWith(base) ? value.slice(base.length) : value;
+}
+
+function compactAutoMemory(cwd, text) {
+  const value = safeMemoryText(text);
+  const match = value.match(/^(Recent completed navigation for .+?: start with )(.+?)( when relevant\.)$/);
+  if (!match) return value;
+  const files = match[2].split(", ").map((path) => projectRelativePath(cwd, path));
+  return `${match[1]}${files.join(", ")}${match[3]}`;
 }
 
 function memoryPrompt(memories) {
@@ -1051,4 +1065,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashOutputFailed, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, sourcePathsFromContent, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashOutputFailed, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, sourcePathsFromContent, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };
