@@ -95,12 +95,21 @@ try {
   const complexRun = rows("runs.jsonl").at(-1);
   assert.equal(complexRun.trainable, true);
 
+  writeFileSync(join(dir, "src", "key.test.js"), 'import assert from "node:assert/strict";\nimport test from "node:test";\nimport { renderImport } from "./render.js";\n\ntest("adds a stable normalized import key without changing the label", () => {\n  assert.deepEqual(renderImport({ profile: { name: " Ada ", email: " ADA@Example.COM " } }), { label: "Ada", key: "ada@example.com" });\n  assert.deepEqual(renderImport({ profile: { name: " Ada " } }), { label: "Ada", key: "ada" });\n});\n');
+  const featureRpc = startRpc("read,bash,edit");
+  await featureRpc.prompt("Import consumers need a stable `key` now. Implement it without changing label behavior. The key must be normalized profile email if present; otherwise normalized label. Acceptance: public API stays compatible and `npm test` passes. Do not edit tests.");
+  featureRpc.stop();
+  assert.match(readFileSync(join(dir, "src", "render.js"), "utf8"), /key/);
+  const featureRun = rows("runs.jsonl").at(-1);
+  assert.equal(featureRun.trainable, true);
+
   console.log(JSON.stringify({
     status: "ok",
-    cases: ["vague-clarification", "same-session-clarification-to-sealed-edit", "multi-file-regression"],
+    cases: ["vague-clarification", "same-session-clarification-to-sealed-edit", "multi-file-regression", "feature-with-compatibility"],
     runs: rows("runs.jsonl").length,
     sealedRun: completed,
     complexRun,
+    featureRun,
   }));
 } finally {
   rmSync(dir, { recursive: true, force: true });
