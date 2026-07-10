@@ -444,7 +444,7 @@ function toolCallKey(event) {
 function isExplorationCall(event) {
   if (event.toolName === "read") return true;
   if (event.toolName !== "bash") return false;
-  return /\b(?:cat|find|grep|rg|sed|head|tail)\b/.test(String(event.input?.command || ""));
+  return /\b(?:find|grep|rg)\b/.test(String(event.input?.command || ""));
 }
 
 function capToolContent(content, limit = MAX_BASH_OUTPUT_CHARS) {
