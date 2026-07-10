@@ -50,6 +50,19 @@ try {
   const vagueNl = run("vague-nl", "Maak het even goed voor morgen.");
   assert.match(vagueNl, /\?|welk|wat|doel|acceptatie/i, vagueNl);
   assert.equal(rows("session.jsonl").at(-1).ambiguous, true);
+  const guidedVague = run("guided", "Maak dit klaar voor release.");
+  assert.match(guidedVague, /\?|welk|wat|doel|acceptatie/i, guidedVague);
+  assert.equal(rows("session.jsonl").at(-1).ambiguous, true);
+  writeFileSync(join(dir, "task.js"), 'const status = "draft";\n');
+  run(
+    "guided",
+    "Target: task.js. Acceptance: replace exactly `const status = \"draft\";` with `const status = \"ready\";`, then use bash to print task.js. Do not edit any other file.",
+    "bash"
+  );
+  assert.equal(readFileSync(join(dir, "task.js"), "utf8"), 'const status = "ready";\n');
+  const guidedFeedback = rows("feedback.jsonl").at(-1);
+  assert.equal(guidedFeedback.sessionId, "guided");
+  assert.equal(guidedFeedback.resolved, true);
   const clarified = run("vague", "Perfect. Target: README.md. Acceptance: add one sentence. Without tools, state whether this is actionable.");
   assert.match(clarified, /actionable|ready|can/i, clarified);
   const feedback = rows("feedback.jsonl").at(-1);
@@ -88,7 +101,7 @@ try {
 
   console.log(JSON.stringify({
     status: "ok",
-    cases: ["vague-clarification", "vague-clarification-nl", "clarification-feedback", "concrete-actionability", "sealed-edit", "live-failure-learning", "runtime-evidence-guard", "attempt-journal"],
+    cases: ["vague-clarification", "vague-clarification-nl", "vague-to-execution", "clarification-feedback", "concrete-actionability", "sealed-edit", "live-failure-learning", "runtime-evidence-guard", "attempt-journal"],
     runs: rows("runs.jsonl").length,
   }));
 } finally {
