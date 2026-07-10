@@ -70,7 +70,7 @@ function median(values) {
 }
 
 function trend(cwd, bucket) {
-  const rows = readJsonl(cwd, RUNS).filter((row) => !bucket || row.bucket === bucket);
+  const rows = validRuns(readJsonl(cwd, RUNS)).filter((row) => !bucket || row.bucket === bucket);
   const groups = {};
   for (const row of rows) {
     groups[row.bucket] ??= {};
@@ -92,18 +92,28 @@ function trend(cwd, bucket) {
 }
 
 function modeFor(cwd, bucket) {
-  const rows = readJsonl(cwd, RUNS).filter((row) => row.bucket === bucket);
+  const rows = validRuns(readJsonl(cwd, RUNS)).filter((row) => row.bucket === bucket);
   const current = rows.filter((row) => row.mode === "current");
   const candidate = rows.filter((row) => row.mode === "candidate");
-  if (current.length >= 1 && candidate.length < 3) return "candidate";
-  if (current.length >= 1 && candidate.length >= 3) {
+  if (current.length >= 1 && candidate.length >= 1) {
     const currentTokens = median(current.map((row) => row.totalTokens || 0)) ?? Infinity;
     const candidateTokens = median(candidate.map((row) => row.totalTokens || 0)) ?? Infinity;
     const currentElapsed = median(current.map((row) => row.elapsedMs || 0)) ?? Infinity;
     const candidateElapsed = median(candidate.map((row) => row.elapsedMs || 0)) ?? Infinity;
-    return candidateTokens <= currentTokens && candidateElapsed <= currentElapsed ? "candidate" : "current";
+    if (candidateTokens <= currentTokens && candidateElapsed <= currentElapsed) return "candidate";
+    if (candidateTokens > currentTokens && candidateElapsed > currentElapsed) return "current";
+    return candidate.length < 2 ? "candidate" : "current";
   }
+  if (current.length >= 1) return "candidate";
   return "current";
+}
+
+function validRuns(rows) {
+  return rows.filter((row) =>
+    Number(row.totalTokens) > 0 &&
+    Number(row.elapsedMs) > 0 &&
+    (row.mode === "current" || row.mode === "candidate")
+  );
 }
 
 function instruction(cwd, prompt) {
@@ -298,4 +308,4 @@ export default function tau(pi) {
   });
 }
 
-export { bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryPrompt, modeFor, recentMemories, runKey, safeMemoryText, status, tauDir, trend };
+export { bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryPrompt, modeFor, recentMemories, runKey, safeMemoryText, status, tauDir, trend, validRuns };

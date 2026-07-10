@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryPrompt, recentMemories, safeMemoryText, trend } from "../pi-extension/index.js";
+import tau, { bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryPrompt, modeFor, recentMemories, safeMemoryText, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 try {
@@ -12,6 +12,7 @@ try {
   assert.equal(isSimplePrompt("fix this bug"), false);
   assert.equal(median([3, 1, 2]), 2);
   assert.equal(median([1, 2, 3, 4]), 2.5);
+  assert.equal(validRuns([{ mode: "candidate", totalTokens: 0, elapsedMs: 10 }]).length, 0);
   const first = instruction(dir, "Fix failing test now");
   assert.equal(first.mode, "current");
   assert.deepEqual(trend(dir), {});
@@ -49,6 +50,20 @@ try {
   }
   assert.equal(instruction(zeroDir, "zero").mode, "candidate");
   rmSync(zeroDir, { recursive: true, force: true });
+  const worseDir = mkdtempSync(join(tmpdir(), "tau-worse-"));
+  mkdirSync(join(worseDir, ".tau"), { recursive: true });
+  appendFileSync(join(worseDir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "worse", mode: "current", totalTokens: 100, elapsedMs: 1000 }) + "\n");
+  appendFileSync(join(worseDir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "worse", mode: "candidate", totalTokens: 110, elapsedMs: 1100 }) + "\n");
+  assert.equal(modeFor(worseDir, "worse"), "current");
+  rmSync(worseDir, { recursive: true, force: true });
+  const mixedDir = mkdtempSync(join(tmpdir(), "tau-mixed-"));
+  mkdirSync(join(mixedDir, ".tau"), { recursive: true });
+  appendFileSync(join(mixedDir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "mixed", mode: "current", totalTokens: 100, elapsedMs: 1000 }) + "\n");
+  appendFileSync(join(mixedDir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "mixed", mode: "candidate", totalTokens: 90, elapsedMs: 1200 }) + "\n");
+  assert.equal(modeFor(mixedDir, "mixed"), "candidate");
+  appendFileSync(join(mixedDir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "mixed", mode: "candidate", totalTokens: 90, elapsedMs: 1200 }) + "\n");
+  assert.equal(modeFor(mixedDir, "mixed"), "current");
+  rmSync(mixedDir, { recursive: true, force: true });
 
   const handlers = {};
   const pi = {
