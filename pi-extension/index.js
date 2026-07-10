@@ -183,8 +183,9 @@ function trend(cwd, bucket) {
 function modeFor(cwd, bucket) {
   const rows = validRuns(readJsonl(cwd, RUNS)).filter((row) => row.bucket === bucket);
   const current = rows.filter((row) => row.mode === "current");
-  // Memory experiments must not make the minimal candidate look worse.
-  const candidate = rows.filter((row) => row.mode === "candidate" && Number(row.memoryLimit || 0) === 0);
+  const candidateRows = rows.filter((row) => row.mode === "candidate");
+  const candidateLimit = candidateRows.length ? bestMemoryLimit(candidateRows, [...new Set(candidateRows.map((row) => Number(row.memoryLimit || 0)))]) : 0;
+  const candidate = candidateRows.filter((row) => Number(row.memoryLimit || 0) === candidateLimit);
   if (current.length >= 1 && candidate.length >= 1) {
     const currentTokens = median(current.map((row) => row.totalTokens || 0)) ?? Infinity;
     const candidateTokens = median(candidate.map((row) => row.totalTokens || 0)) ?? Infinity;

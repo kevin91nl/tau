@@ -110,6 +110,13 @@ try {
   appendFileSync(join(memoryModeDir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "memory-mode", mode: "candidate", memoryLimit: 3, totalTokens: 200, elapsedMs: 2000 }) + "\n");
   assert.equal(modeFor(memoryModeDir, "memory-mode"), "candidate");
   rmSync(memoryModeDir, { recursive: true, force: true });
+  const adaptiveMemoryDir = mkdtempSync(join(tmpdir(), "tau-adaptive-memory-"));
+  mkdirSync(join(adaptiveMemoryDir, ".tau"), { recursive: true });
+  appendFileSync(join(adaptiveMemoryDir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "adaptive", mode: "current", totalTokens: 100, elapsedMs: 1000 }) + "\n");
+  appendFileSync(join(adaptiveMemoryDir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "adaptive", mode: "candidate", memoryLimit: 0, totalTokens: 200, elapsedMs: 2000 }) + "\n");
+  appendFileSync(join(adaptiveMemoryDir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "adaptive", mode: "candidate", memoryLimit: 1, totalTokens: 90, elapsedMs: 900 }) + "\n");
+  assert.equal(modeFor(adaptiveMemoryDir, "adaptive"), "candidate");
+  rmSync(adaptiveMemoryDir, { recursive: true, force: true });
   for (let index = 0; index < 3; index += 1) {
     appendGlobalRun({ taskKind: "code-fix", mode: "current", totalTokens: 100, elapsedMs: 1000, memoryLimit: 0 });
     appendGlobalRun({ taskKind: "code-fix", mode: "candidate", totalTokens: 80, elapsedMs: 900, memoryLimit: 0 });
