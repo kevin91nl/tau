@@ -66,13 +66,15 @@ function rows(file) {
 
 try {
   writeFileSync(join(dir, "task.js"), 'const status = "draft";\n');
+  writeFileSync(join(dir, "task.test.js"), 'import assert from "node:assert/strict";\nimport { readFileSync } from "node:fs";\nassert.match(readFileSync(new URL("./task.js", import.meta.url), "utf8"), /const status = "ready";/);\n');
+  writeFileSync(join(dir, "package.json"), '{"type":"module","scripts":{"test":"node task.test.js"}}\n');
   writeFileSync(join(dir, "untouched.txt"), "keep\n");
 
   const rpc = startRpc("read,bash,edit");
   await rpc.prompt("Maak de checkout goed voor morgen zonder iets kapot te maken.");
   assert.equal(rows("session.jsonl").at(-1).ambiguous, true);
 
-  await rpc.prompt("Target: task.js. First read only task.js. Replace exactly `const status = \"draft\";` with `const status = \"ready\";`. Then use bash to print task.js. Do not edit any other file. Acceptance: task.js prints ready.");
+  await rpc.prompt("Target: task.js. First read only task.js. Replace exactly `const status = \"draft\";` with `const status = \"ready\";`. Then run `npm test`. Do not edit any other file. Acceptance: npm test passes.");
   rpc.stop();
   assert.equal(readFileSync(join(dir, "task.js"), "utf8"), 'const status = "ready";\n');
   assert.equal(readFileSync(join(dir, "untouched.txt"), "utf8"), "keep\n");

@@ -13,7 +13,7 @@ const provider = process.env.TAU_EVAL_PROVIDER || "lmstudio";
 const model = process.env.TAU_EVAL_MODEL || "qwen3.6-35b-a3b-ud-mlx";
 const timeout = Number(process.env.TAU_EVAL_TIMEOUT_MS || 180000);
 const runs = Number(process.env.TAU_BENCH_RUNS || 4);
-const prompt = "Target: task.js. Acceptance: replace exactly `const status = \"draft\";` with `const status = \"ready\";`, then use bash to print task.js. Do not edit any other file.";
+const prompt = "Target: task.js. Acceptance: replace exactly `const status = \"draft\";` with `const status = \"ready\";`, then run npm test. Do not edit any other file.";
 const env = { ...process.env, TAU_HOME: process.env.TAU_HOME || join(dir, "tau-home") };
 
 function median(values) {
@@ -72,6 +72,8 @@ function run(index) {
 
 try {
   assert.ok(Number.isInteger(runs) && runs >= 2, "TAU_BENCH_RUNS must be at least 2");
+  writeFileSync(join(dir, "task.test.js"), 'import assert from "node:assert/strict";\nimport { readFileSync } from "node:fs";\nassert.match(readFileSync(new URL("./task.js", import.meta.url), "utf8"), /const status = "ready";/);\n');
+  writeFileSync(join(dir, "package.json"), '{"type":"module","scripts":{"test":"node task.test.js"}}\n');
   for (let index = 0; index < runs; index += 1) {
     writeFileSync(join(dir, "task.js"), 'const status = "draft";\n');
     await run(index);

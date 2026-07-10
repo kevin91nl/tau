@@ -27,7 +27,7 @@ pi "fix this bug"
 
 Tau is local-only. No daemon. No database. No embeddings. No external service.
 
-Learning is automatic. Every normally completed Pi task records local metrics, an aggregate global policy row, and, when Pi touched explicit source files, one compact local navigation hint for a later similar task. No slash command, manual memory write, or background model call is needed. Incomplete tasks remain visible in the attempt journal but never train the policy or create a memory.
+Learning is automatic, but policy learning requires acceptance evidence: a successful recognized test command such as `npm test`, `pytest`, `go test`, `cargo test`, or `node --test`. Tau records all completed runs, while unverified runs remain visible but do not tune policy or create auto-memory. No slash command, manual memory write, or background model call is needed. Incomplete tasks remain visible in the attempt journal but never train the policy or create a memory.
 
 Tau deliberately does not ask a second model to summarize every turn. That would add latency and tokens before the next user-visible result. It uses deterministic evidence from the completed run instead: task bucket plus up to three explicit source paths. These hints are only injected for the same bucket and only when the measured memory experiment selects them.
 

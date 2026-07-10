@@ -230,9 +230,14 @@ function validRuns(rows) {
 
 function isTrainableRun(row) {
   return row.trainable !== false &&
+    row.accepted !== false &&
     !row.errors?.length &&
     Number(row.totalTokens) <= MAX_TRAINABLE_TOKENS &&
     Number(row.tools || 0) <= MAX_TRAINABLE_TOOLS;
+}
+
+function isVerificationCommand(command) {
+  return /\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?test\b|\bpytest\b|\bgo\s+test\b|\bcargo\s+test\b|\bnode\s+--test\b/.test(String(command || ""));
 }
 
 function memoryLimitFor(cwd, hash, mode, simple, bucket) {
@@ -618,7 +623,7 @@ function normalizeMacSed(command, platform = process.platform) {
 }
 
 function appendAutoReflection(active) {
-  if (active.ambiguity || active.errors.length || !active.files.size) return;
+  if (!active.accepted || active.ambiguity || active.errors.length || !active.files.size) return;
   const files = [...active.files].slice(0, 3);
   const text = `Recent completed navigation for ${active.bucket}: start with ${files.join(", ")} when relevant.`;
   if (recentMemories(active.cwd, Number.MAX_SAFE_INTEGER, active.bucket).includes(text)) return;
@@ -683,7 +688,9 @@ function finishActiveRun(key) {
     outputCaps: active.outputCaps,
     contextPrunes: active.contextPrunes,
     errors: active.errors,
+    accepted: active.verified,
   };
+  active.accepted = run.accepted;
   run.trainable = isTrainableRun(run);
   appendJsonl(active.cwd, RUNS, run);
   appendGlobalRun({
@@ -798,6 +805,8 @@ export default function tau(pi) {
       seenExplorationCalls: new Set(),
       files: new Set(),
       observedSymbols: new Set(),
+      verificationCalls: new Set(),
+      verified: false,
       prompt,
       requiresRuntimeProof: needsRuntimeProof(prompt),
       attemptId: `${Date.now().toString(36)}-${++attemptSequence}`,
@@ -851,6 +860,7 @@ export default function tau(pi) {
     active.tools += 1;
     if (!event.isError) {
       for (const symbol of observedSymbols(event.content)) active.observedSymbols.add(symbol);
+      if (active.verificationCalls.has(event.toolCallId)) active.verified = true;
     }
     const content = event.toolName === "bash" ? capToolContent(event.content) : undefined;
     if (content) active.outputCaps += 1;
@@ -894,6 +904,7 @@ export default function tau(pi) {
     const path = sourcePath(event.input);
     if (active && path) active.files.add(path);
     if (active && event.toolName === "bash") {
+      if (isVerificationCommand(event.input?.command)) active.verificationCalls.add(event.toolCallId);
       for (const source of sourcePathsFromCommand(event.input?.command)) active.files.add(source);
     }
     if (event.toolName === "read") {
@@ -1004,4 +1015,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };

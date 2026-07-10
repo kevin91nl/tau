@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -19,6 +19,10 @@ try {
   assert.equal(isTrainableRun({ totalTokens: 250_001, tools: 1 }), false);
   assert.equal(isTrainableRun({ totalTokens: 100, tools: 17 }), false);
   assert.equal(isTrainableRun({ totalTokens: 100, tools: 1, errors: ["bash"] }), false);
+  assert.equal(isTrainableRun({ totalTokens: 100, tools: 1, accepted: false }), false);
+  assert.equal(isVerificationCommand("npm test"), true);
+  assert.equal(isVerificationCommand("node --test"), true);
+  assert.equal(isVerificationCommand("sed -n '1,20p' app.js"), false);
   assert.equal(promptHash("same"), promptHash("same"));
   assert.equal(repeatGuidance(0), "");
   assert.match(repeatGuidance(2), /no extra checks/);
@@ -211,13 +215,15 @@ try {
   handlers.tool_call(cappedRead, ctx);
   assert.equal(cappedRead.input.limit, MAX_READ_LINES);
   handlers.tool_result({}, ctx);
+  handlers.tool_call({ toolName: "bash", toolCallId: "persisted-verify", input: { command: "npm test" } }, ctx);
+  handlers.tool_result({ toolName: "bash", toolCallId: "persisted-verify", isError: false }, ctx);
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 10, output: 2 } } }, ctx);
   handlers.agent_end({}, ctx);
   const runPath = join(dir, ".tau", "runs.jsonl");
   assert.equal(existsSync(runPath), true);
   const persisted = JSON.parse(readFileSync(runPath, "utf8").trim().split("\n").at(-1));
   assert.equal(persisted.totalTokens, 12);
-  assert.equal(persisted.tools, 1);
+  assert.equal(persisted.tools, 2);
   assert.equal(persisted.repeats, 0);
   const autoMemory = listedMemories(dir).at(-1);
   assert.equal(autoMemory.text.includes("tests/unit/test_company_agent.py"), true);
@@ -282,7 +288,9 @@ try {
   const recoveredCtx = { cwd: dir, sessionManager: { getSessionId() { return "recovered"; } } };
   handlers.before_agent_start({ prompt: "Fix tests/live failure", systemPrompt: "base" }, recoveredCtx);
   handlers.tool_result({ toolName: "edit", isError: true }, recoveredCtx);
+  handlers.tool_call({ toolName: "bash", toolCallId: "verify", input: { command: "npm test" } }, recoveredCtx);
   handlers.tool_result({ toolName: "edit", isError: false }, recoveredCtx);
+  handlers.tool_result({ toolName: "bash", toolCallId: "verify", isError: false }, recoveredCtx);
   const recovered = handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 }, content: [{ type: "text", text: "Tests passed." }] } }, recoveredCtx);
   assert.equal(recovered, undefined);
   handlers.agent_end({}, recoveredCtx);
