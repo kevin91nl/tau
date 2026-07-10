@@ -68,7 +68,8 @@ python -m tau_cli.main eval
 python -m tau_cli.main selftest
 python -m tau_cli.main pack "Reply exactly: TAU_PACK_OK" --cwd /Users/kevin/projects/tau
 /Users/kevin/projects/tau/bin/pi-bare -p "$(python -m tau_cli.main pack 'Reply exactly: TAU_PACK_OK' --cwd /Users/kevin/projects/tau)"
-python -m tau_cli.main improve "Improve Tau tests or docs"
+python -m tau_cli.main improve "Improve Tau tests or docs"     # creates retained proposals
+python -m tau_cli.main improve "Improve Tau tests or docs" --apply
 ```
 
 ## Auto-learning loop

@@ -540,6 +540,15 @@ def cmd_improve(args: argparse.Namespace) -> int:
         print(proc.stdout)
         print("No TAU_OPS_JSON found.", file=sys.stderr)
         return 2
+    if not args.apply:
+        proposals = []
+        for op in ops:
+            if op.get("op") != "write":
+                continue
+            proposals.append(create_proposal(root, rel=str(op.get("path", "")), content=str(op.get("content", ""))))
+        append_jsonl(root / ".tau" / "ledger.jsonl", {"event": "improve_proposed", "count": len(proposals)})
+        print(json.dumps({"state": "proposed", "count": len(proposals), "proposals": proposals}, indent=2, sort_keys=True))
+        return 0 if proposals else 2
     changed = _apply_ops(root, ops)
     check = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"], cwd=root, text=True)
     print(f"changed: {', '.join(changed)}")
@@ -587,6 +596,7 @@ def parser() -> argparse.ArgumentParser:
     im.add_argument("prompt")
     im.add_argument("--pi-bare", default="/Users/kevin/projects/tau/bin/pi-bare")
     im.add_argument("--timeout", type=int, default=300)
+    im.add_argument("--apply", action="store_true")
 
     # memory subcommands
     mem = sub.add_parser("memory")

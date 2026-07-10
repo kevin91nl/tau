@@ -178,11 +178,14 @@ export default function(pi: ExtensionAPI) {
     parameters: Type.Object({
       prompt: Type.String({ description: "Improvement goal." }),
       cwd: Type.Optional(Type.String({ description: "Project directory. Defaults to current cwd." })),
+      apply: Type.Optional(Type.Boolean({ description: "Apply ops directly. Default false creates proposals." })),
       timeout: Type.Optional(Type.Number({ description: "Timeout seconds. Default 300." }))
     }),
     async execute(_callId, params) {
       const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
-      const r = runTau(["improve", String(params.prompt), "--cwd", cwd, "--timeout", String(params.timeout ?? 300)], cwd);
+      const args = ["improve", String(params.prompt), "--cwd", cwd, "--timeout", String(params.timeout ?? 300)];
+      if (params.apply) args.push("--apply");
+      const r = runTau(args, cwd);
       return textResult(r.text, r.details);
     }
   });
