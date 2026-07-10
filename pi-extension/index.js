@@ -704,6 +704,7 @@ function finishActiveRun(key) {
     tools: run.tools,
     readCaps: run.readCaps,
     outputCaps: run.outputCaps,
+    accepted: run.accepted,
   });
   appendJsonl(active.cwd, ATTEMPTS, {
     ts: run.ts,

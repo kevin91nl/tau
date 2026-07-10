@@ -140,6 +140,8 @@ try {
   }
   assert.equal(globalModeFor("code-fix"), "candidate");
   assert.equal(globalModeFor("code-fix", "other-model"), "current");
+  appendGlobalRun({ taskKind: "implementation", mode: "candidate", totalTokens: 1, elapsedMs: 1, accepted: false });
+  assert.equal(globalStatus().taskKinds.implementation, undefined);
   const crossProjectDir = mkdtempSync(join(tmpdir(), "tau-cross-project-"));
   const globalInstruction = instruction(crossProjectDir, "Target: app.js. Acceptance: fix bug.");
   assert.equal(globalInstruction.mode, "candidate");
@@ -203,7 +205,7 @@ try {
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 10, output: 2 } } }, ctx);
   handlers.agent_end({}, ctx);
   assert.equal(attemptStats(dir).unfinished, 0);
-  assert.equal(globalStatus("unknown/unknown").runs, 1);
+  assert.equal(globalStatus("unknown/unknown").runs, 0);
   handlers.before_agent_start({ prompt: "Reply exactly: OK", systemPrompt: "base" }, ctx);
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "OK" }] } }, ctx);
   assert.equal(attemptStats(dir).unfinished, 0);
