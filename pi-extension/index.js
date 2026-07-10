@@ -151,7 +151,7 @@ function isPlanningPrompt(prompt) {
 
 function taskGuidance(kind) {
   if (kind !== "planning") return "";
-  return "Planning task: inspect only what is needed. Do not edit. Return a concise goal, affected files, ordered steps, verification, and risks/unknowns.";
+  return "Planning task: inspect only what is needed. Do not edit. Return a concise goal, affected files, ordered steps, verification, and risks/unknowns. Ground each proposed change in inspected source. Do not invent API fields, provider contracts, or internal representations; turn anything unobserved into an explicit validation step.";
 }
 
 function promptHash(prompt) {

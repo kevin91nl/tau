@@ -348,6 +348,7 @@ try {
   const planCtx = { cwd: dir, sessionManager: { getSessionId() { return "plan"; } } };
   const planning = handlers.before_agent_start({ prompt: "Maak een plan voor src/app.js", systemPrompt: "base" }, planCtx);
   assert.match(planning.systemPrompt, /Planning task/);
+  assert.match(planning.systemPrompt, /Do not invent API fields/);
   assert.equal(handlers.tool_call({ toolName: "edit", input: { path: "src/app.js" } }, planCtx).block, true);
   handlers.agent_end({}, planCtx);
 } finally {
