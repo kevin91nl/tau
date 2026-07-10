@@ -61,6 +61,14 @@ function bucketFromPrompt(prompt) {
   return words.join("-") || "general";
 }
 
+function promptHash(prompt) {
+  let hash = 5381;
+  for (const char of String(prompt || "")) {
+    hash = ((hash << 5) + hash) ^ char.charCodeAt(0);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function median(values) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -118,23 +126,42 @@ function validRuns(rows) {
 
 function instruction(cwd, prompt) {
   const bucket = bucketFromPrompt(prompt);
+  const hash = promptHash(prompt);
   const mode = modeFor(cwd, bucket);
   const maxFiles = mode === "candidate" ? 8 : 16;
   const simple = isSimplePrompt(prompt);
+  const repeats = repeatCount(cwd, hash);
   const memories = simple || mode !== "candidate" ? [] : recentMemories(cwd, 3);
   return {
     bucket,
+    promptHash: hash,
     mode,
     simple,
+    repeats,
     text: [
       "Tau is active silently.",
-      `bucket=${bucket}; mode=${mode}; max_files=${maxFiles}.`,
+      `bucket=${bucket}; mode=${mode}; repeats=${repeats}; max_files=${maxFiles}.`,
       simple && mode === "candidate" ? "Answer directly without tools." : "",
+      repeatGuidance(repeats),
       memories.length ? memoryPrompt(memories) : "",
       "Keep context small. Read only files needed. Prefer targeted grep/read over broad scans.",
       "Do not mention Tau unless the user asks.",
     ].filter(Boolean).join(" "),
   };
+}
+
+function repeatGuidance(repeats) {
+  if (repeats >= 2) {
+    return "Repeated exact prompt: use the known minimal path only, run no extra checks beyond the user request, answer in at most 5 short lines.";
+  }
+  if (repeats === 1) {
+    return "Repeated exact prompt: reuse prior minimal path, avoid broader checks, keep answer terse.";
+  }
+  return "";
+}
+
+function repeatCount(cwd, hash) {
+  return validRuns(readJsonl(cwd, RUNS)).filter((row) => row.promptHash === hash).length;
 }
 
 function isSimplePrompt(prompt) {
@@ -203,7 +230,9 @@ export default function tau(pi) {
     activeRuns.set(key, {
       cwd,
       bucket: next.bucket,
+      promptHash: next.promptHash,
       mode: next.mode,
+      repeats: next.repeats,
       startedAt: Date.now(),
       inputTokens: 0,
       outputTokens: 0,
@@ -233,7 +262,9 @@ export default function tau(pi) {
     const run = {
       ts: new Date().toISOString(),
       bucket: active.bucket,
+      promptHash: active.promptHash,
       mode: active.mode,
+      repeats: active.repeats,
       elapsedMs: Date.now() - active.startedAt,
       inputTokens: active.inputTokens,
       outputTokens: active.outputTokens,
@@ -308,4 +339,4 @@ export default function tau(pi) {
   });
 }
 
-export { bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryPrompt, modeFor, recentMemories, runKey, safeMemoryText, status, tauDir, trend, validRuns };
+export { bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryPrompt, modeFor, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, status, tauDir, trend, validRuns };

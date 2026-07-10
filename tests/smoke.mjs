@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryPrompt, modeFor, recentMemories, safeMemoryText, trend, validRuns } from "../pi-extension/index.js";
+import tau, { bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryPrompt, modeFor, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 try {
@@ -13,12 +13,19 @@ try {
   assert.equal(median([3, 1, 2]), 2);
   assert.equal(median([1, 2, 3, 4]), 2.5);
   assert.equal(validRuns([{ mode: "candidate", totalTokens: 0, elapsedMs: 10 }]).length, 0);
+  assert.equal(promptHash("same"), promptHash("same"));
+  assert.equal(repeatGuidance(0), "");
+  assert.match(repeatGuidance(2), /no extra checks/);
   const first = instruction(dir, "Fix failing test now");
   assert.equal(first.mode, "current");
   assert.deepEqual(trend(dir), {});
   mkdirSync(join(dir, ".tau"), { recursive: true });
   appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "fix-failing-test", mode: "current", totalTokens: 100, elapsedMs: 1000, tools: 2 }) + "\n");
   assert.equal(instruction(dir, "Fix failing test now").mode, "candidate");
+  const repeatedHash = promptHash("Repeat exact prompt");
+  appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "repeat-exact-prompt", promptHash: repeatedHash, mode: "current", totalTokens: 100, elapsedMs: 1000 }) + "\n");
+  assert.equal(repeatCount(dir, repeatedHash), 1);
+  assert.match(instruction(dir, "Repeat exact prompt").text, /Repeated exact prompt/);
   appendFileSync(join(dir, ".tau", "memory.jsonl"), "{bad-json\n");
   appendFileSync(join(dir, ".tau", "memory.jsonl"), JSON.stringify({ text: "Use npm workspace test:runtime for Remeda runtime tests." }) + "\n");
   appendFileSync(join(dir, ".tau", "memory.jsonl"), JSON.stringify({ text: "Chunk bugs usually live in packages/remeda/src/chunk.ts." }) + "\n");
@@ -88,6 +95,7 @@ try {
   const persisted = JSON.parse(readFileSync(runPath, "utf8").trim().split("\n").at(-1));
   assert.equal(persisted.totalTokens, 12);
   assert.equal(persisted.tools, 1);
+  assert.equal(persisted.repeats, 0);
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
