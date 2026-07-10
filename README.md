@@ -95,13 +95,21 @@ npm test
 npm run check
 ```
 
-Run local-model evaluation separately. It creates a temporary project and checks ambiguity handling, concrete scope, and live tool-failure learning.
+Run local-model evaluation separately. It creates a temporary project and checks English/Dutch ambiguity handling, clarification feedback, concrete scope, a sealed file edit, and live tool-failure learning.
 
 ```bash
 TAU_PI_BIN="$(command -v pi)" TAU_EVAL_MODEL=qwen3.6-35b-a3b-ud-mlx npm run eval:local
 ```
 
 Set `TAU_EVAL_TIMEOUT_MS` when local model latency needs a larger per-turn budget.
+
+Benchmark repeated, sealed work separately. Every run must make the exact edit; output reports observed current/candidate token, elapsed-time, and tool medians. It reports measurements, never a promised improvement.
+
+```bash
+TAU_PI_BIN="$(command -v pi)" TAU_EVAL_MODEL=qwen3.6-35b-a3b-ud-mlx npm run bench:local
+```
+
+Add `TAU_BENCH_REPORT=/tmp/tau-bench.json` to retain the JSON measurement.
 
 Files:
 

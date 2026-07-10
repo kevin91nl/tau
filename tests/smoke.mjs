@@ -24,6 +24,7 @@ try {
   assert.equal(ambiguityReason("Make our next user interaction delightful"), "target and acceptance criteria missing");
   assert.equal(ambiguityReason("Ensure deployment feels magical but do not change anything users depend on"), "target and acceptance criteria missing");
   assert.equal(ambiguityReason("Give the platform some love before demo day"), "target and acceptance criteria missing");
+  assert.equal(ambiguityReason("Maak het even goed voor morgen."), "target and acceptance criteria missing");
   assert.equal(ambiguityReason("Target: CI. Acceptance: no blocked jobs."), "");
   assert.equal(ambiguityReason("Fix tests/unit/test_json_payload.py"), "");
   assert.equal(feedbackOutcome("Perfect, this works"), "positive");

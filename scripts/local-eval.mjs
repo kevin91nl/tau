@@ -40,9 +40,14 @@ function rows(file) {
 
 try {
   writeFileSync(join(dir, "README.md"), "# Tau local eval\n");
+  writeFileSync(join(dir, "task.js"), 'const status = "draft";\n');
+  writeFileSync(join(dir, "untouched.txt"), "keep\n");
 
   const vague = run("vague", "Give the platform some love before demo day.");
   assert.match(vague, /\?|clarif|what|which|target/i, vague);
+  assert.equal(rows("session.jsonl").at(-1).ambiguous, true);
+  const vagueNl = run("vague-nl", "Maak het even goed voor morgen.");
+  assert.match(vagueNl, /\?|welk|wat|doel|acceptatie/i, vagueNl);
   assert.equal(rows("session.jsonl").at(-1).ambiguous, true);
   const clarified = run("vague", "Perfect. Target: README.md. Acceptance: add one sentence. Without tools, state whether this is actionable.");
   assert.match(clarified, /actionable|ready|can/i, clarified);
@@ -56,6 +61,15 @@ try {
   assert.match(concrete, /actionable|ready|can/i, concrete);
   assert.equal(rows("session.jsonl").at(-1).ambiguous, false);
 
+  run(
+    "sealed-edit",
+    "Target: task.js. Acceptance: replace exactly `const status = \"draft\";` with `const status = \"ready\";`, then use bash to print task.js. Do not edit any other file.",
+    "bash"
+  );
+  assert.equal(readFileSync(join(dir, "task.js"), "utf8"), 'const status = "ready";\n');
+  assert.equal(readFileSync(join(dir, "untouched.txt"), "utf8"), "keep\n");
+  assert.ok(rows("session.jsonl").at(-1).tools >= 2);
+
   const failureOutput = run("failure", "Run false once with bash. Do not repeat it.", "bash");
   assert.match(failureOutput, /Verification guard/, failureOutput);
   const failure = rows("session.jsonl").at(-1);
@@ -68,7 +82,7 @@ try {
 
   console.log(JSON.stringify({
     status: "ok",
-    cases: ["vague-clarification", "clarification-feedback", "concrete-actionability", "live-failure-learning", "runtime-evidence-guard"],
+    cases: ["vague-clarification", "vague-clarification-nl", "clarification-feedback", "concrete-actionability", "sealed-edit", "live-failure-learning", "runtime-evidence-guard"],
     runs: rows("runs.jsonl").length,
   }));
 } finally {

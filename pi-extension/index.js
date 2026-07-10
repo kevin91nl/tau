@@ -228,11 +228,11 @@ function ambiguityReason(prompt) {
   if (/\b(target|scope|acceptance|criteria)\s*:/.test(text)) return "";
   const hasConcreteRef = /\b[\w.-]+\.(?:js|mjs|ts|tsx|py|go|rs|java|json|ya?ml|md)\b|\/[\w.-]+|#\d+|\b(test|error|exception|endpoint|function|class|file)\b/.test(text);
   if (hasConcreteRef) return "";
-  const vagueTarget = /\b(it|this|that|thing|everything|whatever)\b/.test(text);
-  const vagueOutcome = /\b(production[- ]ready|strategic fix|robust and fast|best|better)\b/.test(text);
-  const shortImperative = text.split(/\s+/).length <= 4 && /^(fix|make|improve|refactor|optimize|implement|handle|do)\b/.test(text);
-  const highLevelAction = /\b(sort out|take care of|deal with|look into|address|handle|prepare|ship|finish|ensure)\b/.test(text);
-  const hasAcceptance = /\b(acceptance|must|should|under|less than|pass(?:ing)?|reject|add|remove)\b|\d+\s*(?:ms|s|min|%)/.test(text);
+  const vagueTarget = /\b(it|this|that|thing|everything|whatever|het|dit|dat|alles)\b/.test(text);
+  const vagueOutcome = /\b(production[- ]ready|strategic fix|robust and fast|best|better|goed|beter|klaar)\b/.test(text);
+  const shortImperative = text.split(/\s+/).length <= 4 && /^(fix|make|improve|refactor|optimize|implement|handle|do|maak|verbeter|regel)\b/.test(text);
+  const highLevelAction = /\b(sort out|take care of|deal with|look into|address|handle|prepare|ship|finish|ensure|pak op|zorg)\b/.test(text);
+  const hasAcceptance = /\b(acceptance|must|should|under|less than|pass(?:ing)?|reject|add|remove|moet|mag|binnen|voeg toe|verwijder)\b|\d+\s*(?:ms|s|min|%)/.test(text);
   const vagueConstraint = /\b(without breaking|anything important|as appropriate|where needed|do not change anything|don't change anything)\b/.test(text);
   const subjectiveOutcome = /\b(delightful|world-class|seamless|intuitive|polished|excellent|frictionless|magical)\b/.test(text);
   const unscopedImperative = /^(?:please\s+)?(?:add|build|create|design|develop|ensure|fix|give|implement|improve|make|optimize|prepare|refactor|ship|update|write)\b/.test(text);
