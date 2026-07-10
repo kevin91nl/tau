@@ -13,6 +13,7 @@ const provider = process.env.TAU_EVAL_PROVIDER || "lmstudio";
 const model = process.env.TAU_EVAL_MODEL || "qwen3.6-35b-a3b-ud-mlx";
 const timeoutMs = Number(process.env.TAU_EVAL_TIMEOUT_MS || 180_000);
 const env = { ...process.env, TAU_HOME: process.env.TAU_HOME || join(dir, "tau-home") };
+let rpc;
 
 function startRpc(tools) {
   const child = spawn(pi, [
@@ -83,7 +84,11 @@ function startRpc(tools) {
         resolveStop();
         return;
       }
-      child.once("exit", resolveStop);
+      const timer = setTimeout(resolveStop, 1_000);
+      child.once("exit", () => {
+        clearTimeout(timer);
+        resolveStop();
+      });
       child.kill("SIGTERM");
     });
   }
@@ -102,12 +107,11 @@ try {
   writeFileSync(join(dir, "package.json"), '{"type":"module","scripts":{"test":"node --test"}}\n');
   writeFileSync(join(dir, "untouched.txt"), "keep\n");
 
-  const rpc = startRpc("read,bash,edit");
+  rpc = startRpc("read,bash,edit");
   await rpc.prompt("Maak de checkout goed voor morgen zonder iets kapot te maken.");
   assert.equal(rows("session.jsonl").at(-1).ambiguous, true);
 
   await rpc.prompt("Target: task.js. First read only task.js. Replace exactly `const status = \"draft\";` with `const status = \"ready\";`. Then run `npm test`. Do not edit any other file. Acceptance: npm test passes.");
-  await rpc.stop();
   assert.equal(readFileSync(join(dir, "task.js"), "utf8"), 'const status = "ready";\n');
   assert.equal(readFileSync(join(dir, "untouched.txt"), "utf8"), "keep\n");
   const completed = rows("runs.jsonl").at(-1);
@@ -120,17 +124,13 @@ try {
   writeFileSync(join(dir, "src", "render.js"), 'import { displayName } from "./normalize.js";\n\nexport function renderImport(record) {\n  return { label: displayName(record) };\n}\n');
   writeFileSync(join(dir, "src", "import.test.js"), 'import assert from "node:assert/strict";\nimport test from "node:test";\nimport { renderImport } from "./render.js";\n\ntest("renders a normalized import label", () => {\n  assert.equal(renderImport({ profile: { name: " Ada " } }).label, "Ada");\n  assert.equal(renderImport({ profile: { name: "   " } }).label, "<unknown>");\n  assert.equal(renderImport({}).label, "<unknown>");\n});\n');
 
-  const complexRpc = startRpc("read,bash,edit");
-  await complexRpc.prompt("Customer import labels are wrong after a refactor. Find and fix the regression. Acceptance: preserve normalized non-empty names, render `<unknown>` for whitespace-only or missing names, public API unchanged, and `npm test` passes. Do not edit tests.");
-  await complexRpc.stop();
+  await rpc.prompt("Customer import labels are wrong after a refactor. Find and fix the regression. Acceptance: preserve normalized non-empty names, render `<unknown>` for whitespace-only or missing names, public API unchanged, and `npm test` passes. Do not edit tests.");
   assert.match(readFileSync(join(dir, "src", "normalize.js"), "utf8"), /\.trim\(\)/);
   const complexRun = rows("runs.jsonl").at(-1);
   assert.equal(complexRun.trainable, true);
 
   writeFileSync(join(dir, "src", "key.test.js"), 'import assert from "node:assert/strict";\nimport test from "node:test";\nimport { renderImport } from "./render.js";\n\ntest("adds a stable normalized import key without changing the label", () => {\n  assert.deepEqual(renderImport({ profile: { name: " Ada ", email: " ADA@Example.COM " } }), { label: "Ada", key: "ada@example.com" });\n  assert.deepEqual(renderImport({ profile: { name: " Ada " } }), { label: "Ada", key: "ada" });\n});\n');
-  const featureRpc = startRpc("read,bash,edit");
-  await featureRpc.prompt("Import consumers need a stable `key` now. Implement it without changing label behavior. The key must be normalized profile email if present; otherwise normalized label. Acceptance: public API stays compatible and `npm test` passes. Do not edit tests.");
-  await featureRpc.stop();
+  await rpc.prompt("Import consumers need a stable `key` now. Implement it without changing label behavior. The key must be normalized profile email if present; otherwise normalized label. Acceptance: public API stays compatible and `npm test` passes. Do not edit tests.");
   assert.match(readFileSync(join(dir, "src", "render.js"), "utf8"), /key/);
   const featureRun = rows("runs.jsonl").at(-1);
   assert.equal(featureRun.trainable, true);
@@ -144,5 +144,6 @@ try {
     featureRun,
   }));
 } finally {
+  await rpc?.stop();
   rmSync(dir, { recursive: true, force: true });
 }
