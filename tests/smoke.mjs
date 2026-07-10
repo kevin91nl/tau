@@ -78,8 +78,10 @@ try {
     { role: "toolResult", content: [{ type: "text", text: "middle" }] },
     { role: "toolResult", content: [{ type: "text", text: "new-1" }] },
     { role: "toolResult", content: [{ type: "text", text: "new-2" }] },
+    { role: "assistant", content: [{ type: "thinking", thinking: "new reasoning" }] },
   ]);
   assert.match(compactedMessages[0].content[0].text, /compacted/);
+  assert.match(compactedMessages[1].content[0].text, /assistant reasoning/);
   assert.equal(compactedMessages[3].content[0].text, "new-1");
   const longSystemPrompt = `base rules\n<project_context>\n# Policy\n- Never deploy locally.\n${"filler ".repeat(5_000)}\n</project_context>`;
   const compacted = compactSystemPrompt(longSystemPrompt);

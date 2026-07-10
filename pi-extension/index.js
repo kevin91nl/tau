@@ -521,17 +521,28 @@ function capToolContent(content, limit = MAX_BASH_OUTPUT_CHARS) {
 }
 
 function compactContextMessages(messages, keepToolResults = 2) {
-  const indexes = messages
+  const toolResultIndexes = messages
     .map((message, index) => message?.role === "toolResult" ? index : -1)
     .filter((index) => index >= 0);
-  const stale = indexes.slice(0, -keepToolResults);
-  if (!stale.length) return undefined;
-  const staleSet = new Set(stale);
+  const assistantIndexes = messages
+    .map((message, index) => message?.role === "assistant" ? index : -1)
+    .filter((index) => index >= 0);
+  const staleToolResults = new Set(toolResultIndexes.slice(0, -keepToolResults));
+  // Older model reasoning is high-token and superseded by tool evidence. Keep
+  // the latest assistant turn intact for an in-progress tool loop.
+  const staleAssistants = new Set(assistantIndexes.slice(0, -1));
+  if (!staleToolResults.size && !staleAssistants.size) return undefined;
   return messages.map((message, index) => {
-    if (!staleSet.has(index)) return message;
+    if (staleToolResults.has(index)) {
+      return {
+        ...message,
+        content: [{ type: "text", text: "[Tau compacted an earlier tool result. Reuse later evidence; do not repeat this call.]" }],
+      };
+    }
+    if (!staleAssistants.has(index)) return message;
     return {
       ...message,
-      content: [{ type: "text", text: "[Tau compacted an earlier tool result. Reuse later evidence; do not repeat this call.]" }],
+      content: [{ type: "text", text: "[Tau compacted earlier assistant reasoning. Reuse recent tool evidence and the latest turn.]" }],
     };
   });
 }

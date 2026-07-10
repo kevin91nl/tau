@@ -22,7 +22,7 @@ pi "fix this bug"
 - asks for target and acceptance criteria before acting on clearly ambiguous tasks
 - learns memory count per exact prompt: tries `0`, then bounded `1`/`3` short hints only while earlier trials are not materially worse
 - caps broad Pi file reads at 240 lines; rewrites root-wide `find` and plain `cat` discovery to narrow `rg`/`sed` reads
-- compacts oversized `AGENTS.md` context into a bounded policy capsule for local models; original instructions remain task-readable and authoritative
+- compacts oversized `AGENTS.md`, stale tool results, and stale assistant reasoning into bounded context; original instructions remain task-readable and authoritative
 - never mutates Pi's active tool set
 
 Tau is local-only. No daemon. No database. No embeddings. No external service.
