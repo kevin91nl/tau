@@ -432,6 +432,12 @@ function toolCallKey(event) {
   return `${event.toolName}:${JSON.stringify(event.input || {})}`;
 }
 
+function isExplorationCall(event) {
+  if (event.toolName === "read") return true;
+  if (event.toolName !== "bash") return false;
+  return /\b(?:cat|find|grep|rg|sed|head|tail)\b/.test(String(event.input?.command || ""));
+}
+
 function capToolContent(content, limit = MAX_BASH_OUTPUT_CHARS) {
   if (!Array.isArray(content)) return undefined;
   let remaining = limit;
@@ -705,6 +711,7 @@ export default function tau(pi) {
       steeredErrors: new Set(),
       focusSteered: false,
       failedCalls: new Set(),
+      seenExplorationCalls: new Set(),
       files: new Set(),
       prompt,
       requiresRuntimeProof: needsRuntimeProof(prompt),
@@ -796,6 +803,13 @@ export default function tau(pi) {
     if (active?.failedCalls.has(toolCallKey(event))) {
       return { block: true, reason: `Tau: ${event.toolName} already failed with identical input. Change the tool or arguments.` };
     }
+    if (active && isExplorationCall(event)) {
+      const key = toolCallKey(event);
+      if (active.seenExplorationCalls.has(key)) {
+        return { block: true, reason: "Tau: identical exploration already completed. Use its evidence or inspect a narrower, different target." };
+      }
+      active.seenExplorationCalls.add(key);
+    }
   });
 
   pi.on("agent_end", (_event, ctx) => {
@@ -867,4 +881,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };

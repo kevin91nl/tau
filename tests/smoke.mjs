@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -45,6 +45,8 @@ try {
   assert.equal(narrowBashCommand("pytest tests/unit/test_app.py", "Fix app"), "");
   assert.deepEqual(sourcePathsFromCommand("sed -n '1,80p' src/runtime/dedupe.py tests/test_dedupe.py"), ["src/runtime/dedupe.py", "tests/test_dedupe.py"]);
   assert.match(focusLesson(new Set(["src/a.py"])), /enough exploration/);
+  assert.equal(isExplorationCall({ toolName: "bash", input: { command: "grep -rn x src" } }), true);
+  assert.equal(isExplorationCall({ toolName: "bash", input: { command: "pytest tests/test_x.py" } }), false);
   const compactedMessages = compactContextMessages([
     { role: "toolResult", content: [{ type: "text", text: "old" }] },
     { role: "assistant", content: [] },
@@ -202,6 +204,9 @@ try {
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 } } }, focusCtx);
   handlers.agent_end({}, focusCtx);
   handlers.before_agent_start({ prompt: "Fix tests/live failure", systemPrompt: "base" }, liveCtx);
+  const firstSearch = { toolName: "bash", input: { command: "grep -rn dedupe src" } };
+  assert.equal(handlers.tool_call(firstSearch, liveCtx), undefined);
+  assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "grep -rn dedupe src" } }, liveCtx).block, true);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
   assert.equal(sent.length, 2);
