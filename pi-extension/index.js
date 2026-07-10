@@ -612,6 +612,21 @@ function sourcePathsFromCommand(command) {
     .filter(Boolean);
 }
 
+function sourcePathsFromContent(content) {
+  const text = Array.isArray(content)
+    ? content.filter((block) => block?.type === "text").map((block) => block.text).join("\n")
+    : "";
+  return sourcePathsFromCommand(text);
+}
+
+function isFocusedTargetCall(event, active) {
+  if (!active) return false;
+  if (event.toolName === "read") return active.files.has(sourcePath(event.input));
+  if (event.toolName !== "bash") return false;
+  const paths = sourcePathsFromCommand(event.input?.command);
+  return paths.length > 0 && paths.every((path) => active.files.has(path));
+}
+
 function bashSearchTerms(prompt) {
   const ignored = new Set(["acceptance", "add", "and", "bug", "code", "defect", "find", "fix", "for", "from", "only", "scope", "test", "tests", "the", "this", "with"]);
   return String(prompt || "").toLowerCase().match(/[a-z][a-z0-9_-]{2,}/g)?.filter((word) => !ignored.has(word)).slice(0, 3) || ["todo"];
@@ -875,6 +890,7 @@ export default function tau(pi) {
     active.tools += 1;
     const failed = event.isError || (event.toolName === "bash" && bashOutputFailed(event.content));
     if (!failed) {
+      for (const path of sourcePathsFromContent(event.content)) active.files.add(path);
       for (const symbol of observedSymbols(event.content)) active.observedSymbols.add(symbol);
       if (active.verificationCalls.has(event.toolCallId)) active.verified = true;
       if (event.toolName === "edit" || event.toolName === "write") active.actionRequired = false;
@@ -887,7 +903,7 @@ export default function tau(pi) {
       active.actionRequired = true;
       pi.sendMessage({ customType: "tau.invariant", content: invariant, display: "Tau" }, { deliverAs: "steer" });
     }
-    if (!failed && !active.focusSteered && active.tools >= 4 && (active.taskKind === "code-fix" || active.taskKind === "implementation")) {
+    if (!failed && !active.focusSteered && active.files.size && active.tools >= 4 && (active.taskKind === "code-fix" || active.taskKind === "implementation")) {
       active.focusSteered = true;
       pi.sendMessage({ customType: "tau.focus", content: focusLesson(active.files), display: "Tau" }, { deliverAs: "steer" });
     }
@@ -913,7 +929,8 @@ export default function tau(pi) {
       return { block: true, reason: "Tau: task is ambiguous. Ask one concise clarification for target and acceptance criteria before using tools." };
     }
     const focusedTestDiscovery = Boolean(active && isFocusedTestDiscovery(event) && !active.verificationDiscoveryUsed);
-    if (active?.focusSteered && isExplorationCall(event) && !focusedTestDiscovery) {
+    const focusedTarget = isFocusedTargetCall(event, active);
+    if (active?.focusSteered && isExplorationCall(event) && !focusedTestDiscovery && !focusedTarget) {
       return { block: true, reason: "Tau: exploration budget exhausted. Make the smallest justified edit or run a focused test." };
     }
     if (active?.actionRequired && isExplorationCall(event) && !focusedTestDiscovery) {
@@ -1034,4 +1051,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashOutputFailed, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isFocusedTestDiscovery, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashOutputFailed, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, sourcePathsFromContent, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };

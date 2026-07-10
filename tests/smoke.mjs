@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bashOutputFailed, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isFocusedTestDiscovery, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bashOutputFailed, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, sourcePathsFromContent, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -63,6 +63,8 @@ try {
   assert.equal(parallelOneInstance(lmModels, "qwen:2"), "");
   assert.equal(parallelOneInstance(lmModels, "other"), "");
   assert.deepEqual(sourcePathsFromCommand("sed -n '1,80p' src/runtime/dedupe.py tests/test_dedupe.py"), ["src/runtime/dedupe.py", "tests/test_dedupe.py"]);
+  assert.deepEqual(sourcePathsFromContent([{ type: "text", text: "src/runtime/dedupe.py:17" }]), ["src/runtime/dedupe.py"]);
+  assert.equal(isFocusedTargetCall({ toolName: "read", input: { path: "src/runtime/dedupe.py" } }, { files: new Set(["src/runtime/dedupe.py"]) }), true);
   assert.match(focusLesson(new Set(["src/a.py"])), /enough exploration/);
   assert.match(predicateInvariantLesson([{ type: "text", text: "def job_execution_is_open(x):\n return x not in open_statuses" }]), /do not remove statuses/);
   assert.equal(isExplorationCall({ toolName: "bash", input: { command: "grep -rn x src" } }), true);
@@ -253,6 +255,7 @@ try {
   handlers.agent_end({}, invariantCtx);
   const focusCtx = { cwd: dir, sessionManager: { getSessionId() { return "focus"; } } };
   handlers.before_agent_start({ prompt: "Fix tests/focus.py failure", systemPrompt: "base" }, focusCtx);
+  handlers.tool_call({ toolName: "read", input: { path: "tests/focus.py" } }, focusCtx);
   for (let i = 0; i < 4; i += 1) handlers.tool_result({ toolName: "bash", isError: false }, focusCtx);
   assert.equal(sent.at(-1).message.customType, "tau.focus");
   assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "grep -rn x src" } }, focusCtx).block, true);
