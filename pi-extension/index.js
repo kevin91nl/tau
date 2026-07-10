@@ -7,6 +7,7 @@ const MEMORIES = "memory.jsonl";
 const SESSIONS = "session.jsonl";
 const FEEDBACK = "feedback.jsonl";
 const ATTEMPTS = "attempts.jsonl";
+const MAX_READ_LINES = 240;
 
 function schema(properties = {}) {
   return { type: "object", properties, additionalProperties: false };
@@ -196,6 +197,7 @@ function instruction(cwd, prompt, lesson = "") {
       ambiguityGuidance(ambiguity),
       lesson,
       "Before tools, assess scope. If target or observable acceptance criteria are missing, ask one concise clarification and wait; do not inspect first.",
+      `Context budget: use grep to locate symbols, then read only the needed range. Tau caps each read at ${MAX_READ_LINES} lines; if output is truncated, grep and reread a narrow offset.`,
       "For technical conclusions, state only facts proven by files or tool output. Do not infer library defaults, exception types, or test coverage; mark unsupported behavior unverified without speculation.",
       "Keep context small. Read only files needed. Prefer targeted grep/read over broad scans.",
       "Do not mention Tau unless the user asks.",
@@ -300,6 +302,7 @@ function sessionLesson(cwd, id) {
   if (!last || (!last.tools && !last.errors?.length && !last.ambiguous)) return "";
   if (last.errors?.length) return `Same session last turn: tools=${last.tools}; failed_tools=${last.errors.join(",")}. Reuse known results; do not repeat failed calls unchanged.`;
   if (last.ambiguous) return "Same session prior task lacked target and acceptance criteria. Use the user's clarification before acting.";
+  if (last.readCaps) return "Same session last turn hit a broad-read cap. Use grep first, then reread only the needed offset.";
   return `Same session last turn: tools=${last.tools}. Reuse known results.`;
 }
 
@@ -307,9 +310,13 @@ function liveLesson(toolName) {
   return `Tau live lesson: ${toolName} failed. Read its error; do not repeat unchanged.`;
 }
 
+function toolCallKey(event) {
+  return `${event.toolName}:${JSON.stringify(event.input || {})}`;
+}
+
 function needsRuntimeProof(prompt) {
   const text = String(prompt || "").toLowerCase();
-  return /\b(raise|raises|reject|exception|runtime|behavior|behaviour)\b/.test(text);
+  return /\b(raise|raises|exception|runtime|behavior|behaviour)\b/.test(text);
 }
 
 function evidenceFooter() {
@@ -367,6 +374,43 @@ function listedMemories(cwd) {
 const activeRuns = new Map();
 let attemptSequence = 0;
 
+function finishActiveRun(key) {
+  const active = activeRuns.get(key);
+  if (!active) return;
+  activeRuns.delete(key);
+  const run = {
+    ts: new Date().toISOString(),
+    bucket: active.bucket,
+    promptHash: active.promptHash,
+    mode: active.mode,
+    repeats: active.repeats,
+    memoryLimit: active.memoryLimit,
+    elapsedMs: Date.now() - active.startedAt,
+    inputTokens: active.inputTokens,
+    outputTokens: active.outputTokens,
+    totalTokens: active.inputTokens + active.outputTokens,
+    tools: active.tools,
+    readCaps: active.readCaps,
+  };
+  appendJsonl(active.cwd, RUNS, run);
+  appendJsonl(active.cwd, ATTEMPTS, {
+    ts: run.ts,
+    attemptId: active.attemptId,
+    status: "finished",
+    totalTokens: run.totalTokens,
+    elapsedMs: run.elapsedMs,
+    tools: run.tools,
+  });
+  appendJsonl(active.cwd, SESSIONS, {
+    ts: run.ts,
+    sessionId: active.sessionId,
+    tools: active.tools,
+    readCaps: active.readCaps,
+    errors: active.errors,
+    ambiguous: Boolean(active.ambiguity),
+  });
+}
+
 export default function tau(pi) {
   pi.on("before_agent_start", (event, ctx) => {
     const cwd = ctx.cwd || process.cwd();
@@ -398,8 +442,10 @@ export default function tau(pi) {
       inputTokens: 0,
       outputTokens: 0,
       tools: 0,
+      readCaps: 0,
       errors: [],
       steeredErrors: new Set(),
+      failedCalls: new Set(),
       requiresRuntimeProof: needsRuntimeProof(prompt),
       attemptId: `${Date.now().toString(36)}-${++attemptSequence}`,
     });
@@ -424,6 +470,7 @@ export default function tau(pi) {
       active.outputTokens += Number(msg.usage.output || 0);
     }
     if (msg.stopReason !== "stop") return;
+    finishActiveRun(runKey(ctx));
     if (active.errors.length) {
       return { message: withFooter(msg, failureFooter(), true) };
     }
@@ -436,7 +483,9 @@ export default function tau(pi) {
     const active = activeRuns.get(runKey(ctx));
     if (!active) return;
     active.tools += 1;
-    if (!event.isError || active.steeredErrors.has(event.toolName)) return;
+    if (!event.isError) return;
+    active.failedCalls.add(toolCallKey(event));
+    if (active.steeredErrors.has(event.toolName)) return;
     active.steeredErrors.add(event.toolName);
     active.errors.push(event.toolName);
     pi.sendMessage({
@@ -446,40 +495,22 @@ export default function tau(pi) {
     }, { deliverAs: "steer" });
   });
 
+  pi.on("tool_call", (event, ctx) => {
+    const active = activeRuns.get(runKey(ctx));
+    if (event.toolName === "read") {
+      const requested = Number(event.input?.limit);
+      if (!Number.isFinite(requested) || requested <= 0 || requested > MAX_READ_LINES) {
+        event.input.limit = MAX_READ_LINES;
+        if (active) active.readCaps += 1;
+      }
+    }
+    if (active?.failedCalls.has(toolCallKey(event))) {
+      return { block: true, reason: `Tau: ${event.toolName} already failed with identical input. Change the tool or arguments.` };
+    }
+  });
+
   pi.on("agent_end", (_event, ctx) => {
-    const key = runKey(ctx);
-    const active = activeRuns.get(key);
-    if (!active) return;
-    activeRuns.delete(key);
-    const run = {
-      ts: new Date().toISOString(),
-      bucket: active.bucket,
-      promptHash: active.promptHash,
-      mode: active.mode,
-      repeats: active.repeats,
-      memoryLimit: active.memoryLimit,
-      elapsedMs: Date.now() - active.startedAt,
-      inputTokens: active.inputTokens,
-      outputTokens: active.outputTokens,
-      totalTokens: active.inputTokens + active.outputTokens,
-      tools: active.tools,
-    };
-    appendJsonl(active.cwd, RUNS, run);
-    appendJsonl(active.cwd, ATTEMPTS, {
-      ts: run.ts,
-      attemptId: active.attemptId,
-      status: "finished",
-      totalTokens: run.totalTokens,
-      elapsedMs: run.elapsedMs,
-      tools: run.tools,
-    });
-    appendJsonl(active.cwd, SESSIONS, {
-      ts: run.ts,
-      sessionId: active.sessionId,
-      tools: active.tools,
-      errors: active.errors,
-      ambiguous: Boolean(active.ambiguity),
-    });
+    finishActiveRun(runKey(ctx));
   });
 
   pi.registerTool({
@@ -547,4 +578,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, toolCallKey, trend, validRuns };

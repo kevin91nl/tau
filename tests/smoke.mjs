@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 try {
@@ -31,6 +31,7 @@ try {
   assert.equal(feedbackOutcome("Nee, dit werkt niet"), "negative");
   assert.equal(feedbackOutcome("Acceptance: no blocked jobs remain"), "unknown");
   assert.equal(needsRuntimeProof("Does this raise TypeError?"), true);
+  assert.equal(needsRuntimeProof("Does this source reject invalid input?"), false);
   assert.match(evidenceFooter(), /cannot verify/);
   assert.match(failureFooter(), /tools failed/);
   const first = instruction(dir, "Fix failing test now");
@@ -127,8 +128,16 @@ try {
   assert.equal(attemptStats(dir).unfinished, 1);
   handlers.agent_end({}, ctx);
   assert.equal(attemptStats(dir).unfinished, 0);
+  handlers.before_agent_start({ prompt: "Reply exactly: OK", systemPrompt: "base" }, ctx);
+  handlers.message_end({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "OK" }] } }, ctx);
+  assert.equal(attemptStats(dir).unfinished, 0);
+  handlers.agent_end({}, ctx);
   const start = handlers.before_agent_start({ prompt: "Fix failing test", systemPrompt: "base" }, ctx);
   assert.match(start.systemPrompt, /<tau>/);
+  assert.match(start.systemPrompt, /Context budget/);
+  const cappedRead = { toolName: "read", input: { path: "tests/unit/test_company_agent.py" } };
+  handlers.tool_call(cappedRead, ctx);
+  assert.equal(cappedRead.input.limit, MAX_READ_LINES);
   handlers.message_end({ message: { role: "assistant", usage: { input: 10, output: 2 } } }, ctx);
   handlers.tool_result({}, ctx);
   handlers.agent_end({}, ctx);
@@ -145,8 +154,12 @@ try {
   assert.equal(sent.length, 1);
   assert.equal(sent[0].options.deliverAs, "steer");
   assert.match(sent[0].message.content, /do not repeat unchanged/);
+  const blocked = handlers.tool_call({ toolName: "bash", input: {} }, liveCtx);
+  assert.equal(blocked.block, true);
   handlers.agent_end({}, liveCtx);
   assert.match(sessionLesson(dir, "live"), /failed_tools=bash/);
+  appendFileSync(join(dir, ".tau", "session.jsonl"), JSON.stringify({ sessionId: "readcap", tools: 1, readCaps: 1, errors: [], ambiguous: false }) + "\n");
+  assert.match(sessionLesson(dir, "readcap"), /grep first/);
   const continued = handlers.before_agent_start({ prompt: "Continue", systemPrompt: "base" }, liveCtx);
   assert.match(continued.systemPrompt, /Same session last turn/);
   handlers.agent_end({}, liveCtx);
