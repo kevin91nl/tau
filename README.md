@@ -18,6 +18,7 @@ pi "fix this bug"
 - tries a smaller `candidate` mode after one baseline run
 - keeps the mode with better token/time medians after enough runs
 - stores optional local project memories in `.tau/memory.jsonl`
+- learns within a Pi session: one compact error steer, then a next-turn session hint
 - learns memory count per exact prompt: tests `0`, `1`, then `3` short hints; keeps only a Pareto-better option
 - never mutates Pi's active tool set
 
@@ -68,6 +69,7 @@ Tau writes only inside the current project:
 ```text
 .tau/runs.jsonl    # measured runs
 .tau/memory.jsonl  # optional short hints
+.tau/session.jsonl # tool/error metadata for current Pi sessions
 ```
 
 Commit `.tau/` only if you intentionally want to share local Tau data. Most projects should ignore it.
@@ -75,6 +77,8 @@ Commit `.tau/` only if you intentionally want to share local Tau data. Most proj
 ## Safety
 
 Project memories are treated as untrusted data. Tau redacts common prompt-injection phrases and tells the model not to follow instructions inside memory rows.
+
+Live session learning stores only tool names and error state. It never injects raw tool output; each failed tool type can steer the active turn once.
 
 Run history is strict JSONL. If `.tau/runs.jsonl` is corrupt, Tau fails loudly instead of learning from partial data. Memory JSONL is tolerant, so one bad memory row does not break Pi.
 

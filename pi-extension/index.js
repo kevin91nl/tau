@@ -4,6 +4,7 @@ import { join } from "node:path";
 const TAU_DIR = ".tau";
 const RUNS = "runs.jsonl";
 const MEMORIES = "memory.jsonl";
+const SESSIONS = "session.jsonl";
 
 function schema(properties = {}) {
   return { type: "object", properties, additionalProperties: false };
@@ -13,8 +14,12 @@ function optionalString() {
   return { type: "string" };
 }
 
+function sessionId(ctx) {
+  return ctx?.sessionManager?.getSessionId?.() || "session";
+}
+
 function runKey(ctx) {
-  const session = ctx?.sessionManager?.getSessionId?.() || "session";
+  const session = sessionId(ctx);
   const cwd = ctx?.cwd || process.cwd();
   return `${session}:${cwd}`;
 }
@@ -162,7 +167,7 @@ function bestMemoryLimit(rows, limits = [0, 1, 3]) {
   }).limit;
 }
 
-function instruction(cwd, prompt) {
+function instruction(cwd, prompt, lesson = "") {
   const bucket = bucketFromPrompt(prompt);
   const hash = promptHash(prompt);
   const simple = isSimplePrompt(prompt);
@@ -184,6 +189,7 @@ function instruction(cwd, prompt) {
       simple && mode === "candidate" ? "Answer directly without tools." : "",
       repeatGuidance(repeats),
       memories.length ? memoryPrompt(memories) : "",
+      lesson,
       "Keep context small. Read only files needed. Prefer targeted grep/read over broad scans.",
       "Do not mention Tau unless the user asks.",
     ].filter(Boolean).join(" "),
@@ -214,14 +220,27 @@ function isSimplePrompt(prompt) {
 function status(cwd) {
   const runs = readJsonl(cwd, RUNS);
   const memories = readMemoryJsonl(cwd);
+  const sessions = readJsonl(cwd, SESSIONS);
   const last = runs[runs.length - 1];
   return {
     cwd,
     runs: runs.length,
     memories: memories.length,
+    sessionTurns: sessions.length,
     lastBucket: last?.bucket || null,
     lastMode: last?.mode || null,
   };
+}
+
+function sessionLesson(cwd, id) {
+  const last = readJsonl(cwd, SESSIONS).filter((row) => row.sessionId === id).at(-1);
+  if (!last || (!last.tools && !last.errors?.length)) return "";
+  const failures = last.errors?.length ? ` failed_tools=${last.errors.join(",")}.` : "";
+  return `Same session last turn: tools=${last.tools}.${failures} Reuse known results; do not repeat failed calls unchanged.`;
+}
+
+function liveLesson(toolName) {
+  return `Tau live lesson: ${toolName} failed. Read its error; do not repeat unchanged.`;
 }
 
 function recentMemories(cwd, limit = 3) {
@@ -266,9 +285,11 @@ export default function tau(pi) {
     const cwd = ctx.cwd || process.cwd();
     const key = runKey(ctx);
     activeRuns.delete(key);
-    const next = instruction(cwd, event.prompt || "");
+    const id = sessionId(ctx);
+    const next = instruction(cwd, event.prompt || "", sessionLesson(cwd, id));
     activeRuns.set(key, {
       cwd,
+      sessionId: id,
       bucket: next.bucket,
       promptHash: next.promptHash,
       mode: next.mode,
@@ -278,6 +299,8 @@ export default function tau(pi) {
       inputTokens: 0,
       outputTokens: 0,
       tools: 0,
+      errors: [],
+      steeredErrors: new Set(),
     });
     return { systemPrompt: `${event.systemPrompt}\n\n<tau>\n${next.text}\n</tau>` };
   });
@@ -290,9 +313,18 @@ export default function tau(pi) {
     active.outputTokens += Number(msg.usage.output || 0);
   });
 
-  pi.on("tool_result", (_event, ctx) => {
+  pi.on("tool_result", (event, ctx) => {
     const active = activeRuns.get(runKey(ctx));
-    if (active) active.tools += 1;
+    if (!active) return;
+    active.tools += 1;
+    if (!event.isError || active.steeredErrors.has(event.toolName)) return;
+    active.steeredErrors.add(event.toolName);
+    active.errors.push(event.toolName);
+    pi.sendMessage({
+      customType: "tau.live",
+      content: liveLesson(event.toolName),
+      display: "Tau",
+    }, { deliverAs: "steer" });
   });
 
   pi.on("agent_end", (_event, ctx) => {
@@ -314,6 +346,12 @@ export default function tau(pi) {
       tools: active.tools,
     };
     appendJsonl(active.cwd, RUNS, run);
+    appendJsonl(active.cwd, SESSIONS, {
+      ts: run.ts,
+      sessionId: active.sessionId,
+      tools: active.tools,
+      errors: active.errors,
+    });
   });
 
   pi.registerTool({
@@ -381,4 +419,4 @@ export default function tau(pi) {
   });
 }
 
-export { bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, status, tauDir, trend, validRuns };
+export { bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, trend, validRuns };

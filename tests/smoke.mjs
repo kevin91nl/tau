@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, trend, validRuns } from "../pi-extension/index.js";
+import tau, { bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 try {
@@ -16,6 +16,7 @@ try {
   assert.equal(promptHash("same"), promptHash("same"));
   assert.equal(repeatGuidance(0), "");
   assert.match(repeatGuidance(2), /no extra checks/);
+  assert.match(liveLesson("bash"), /bash failed/);
   const first = instruction(dir, "Fix failing test now");
   assert.equal(first.mode, "current");
   assert.deepEqual(trend(dir), {});
@@ -92,10 +93,12 @@ try {
   rmSync(mixedDir, { recursive: true, force: true });
 
   const handlers = {};
+  const sent = [];
   const pi = {
     on(name, handler) { handlers[name] = handler; },
     registerTool() {},
     registerCommand() {},
+    sendMessage(message, options) { sent.push({ message, options }); },
     getActiveTools() { throw new Error("Tau should not inspect active tools"); },
     setActiveTools() { throw new Error("Tau should not mutate active tools"); },
   };
@@ -115,6 +118,18 @@ try {
   assert.equal(persisted.totalTokens, 12);
   assert.equal(persisted.tools, 1);
   assert.equal(persisted.repeats, 0);
+  const liveCtx = { cwd: dir, sessionManager: { getSessionId() { return "live"; } } };
+  handlers.before_agent_start({ prompt: "Fix live failure", systemPrompt: "base" }, liveCtx);
+  handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
+  handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].options.deliverAs, "steer");
+  assert.match(sent[0].message.content, /do not repeat unchanged/);
+  handlers.agent_end({}, liveCtx);
+  assert.match(sessionLesson(dir, "live"), /failed_tools=bash/);
+  const continued = handlers.before_agent_start({ prompt: "Continue", systemPrompt: "base" }, liveCtx);
+  assert.match(continued.systemPrompt, /Same session last turn/);
+  handlers.agent_end({}, liveCtx);
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
