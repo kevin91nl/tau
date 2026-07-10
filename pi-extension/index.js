@@ -194,6 +194,7 @@ function instruction(cwd, prompt, lesson = "") {
       memories.length ? memoryPrompt(memories) : "",
       ambiguityGuidance(ambiguity),
       lesson,
+      "Before tools, assess scope. If target or observable acceptance criteria are missing, ask one concise clarification and wait; do not inspect first.",
       "Keep context small. Read only files needed. Prefer targeted grep/read over broad scans.",
       "Do not mention Tau unless the user asks.",
     ].filter(Boolean).join(" "),
@@ -233,7 +234,8 @@ function ambiguityReason(prompt) {
   const hasAcceptance = /\b(acceptance|must|should|under|less than|pass(?:ing)?|reject|add|remove)\b|\d+\s*(?:ms|s|min|%)/.test(text);
   const vagueConstraint = /\b(without breaking|anything important|as appropriate|where needed|do not change anything|don't change anything)\b/.test(text);
   const subjectiveOutcome = /\b(delightful|world-class|seamless|intuitive|polished|excellent|frictionless|magical)\b/.test(text);
-  return vagueTarget || vagueOutcome || shortImperative || (highLevelAction && !hasAcceptance) || (vagueConstraint && !hasAcceptance) || (subjectiveOutcome && !hasAcceptance) ? "target and acceptance criteria missing" : "";
+  const unscopedImperative = /^(?:please\s+)?(?:add|build|create|design|develop|ensure|fix|give|implement|improve|make|optimize|prepare|refactor|ship|update|write)\b/.test(text);
+  return vagueTarget || vagueOutcome || shortImperative || (highLevelAction && !hasAcceptance) || (vagueConstraint && !hasAcceptance) || (subjectiveOutcome && !hasAcceptance) || (unscopedImperative && !hasAcceptance) ? "target and acceptance criteria missing" : "";
 }
 
 function ambiguityGuidance(reason) {

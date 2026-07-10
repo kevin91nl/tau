@@ -23,6 +23,7 @@ try {
   assert.equal(ambiguityReason("Make the user journey less confusing without breaking anything important"), "target and acceptance criteria missing");
   assert.equal(ambiguityReason("Make our next user interaction delightful"), "target and acceptance criteria missing");
   assert.equal(ambiguityReason("Ensure deployment feels magical but do not change anything users depend on"), "target and acceptance criteria missing");
+  assert.equal(ambiguityReason("Give the platform some love before demo day"), "target and acceptance criteria missing");
   assert.equal(ambiguityReason("Target: CI. Acceptance: no blocked jobs."), "");
   assert.equal(ambiguityReason("Fix tests/unit/test_json_payload.py"), "");
   assert.equal(feedbackOutcome("Perfect, this works"), "positive");
@@ -30,6 +31,7 @@ try {
   assert.equal(feedbackOutcome("Acceptance: no blocked jobs remain"), "unknown");
   const first = instruction(dir, "Fix failing test now");
   assert.equal(first.mode, "current");
+  assert.match(first.text, /Before tools, assess scope/);
   assert.deepEqual(trend(dir), {});
   mkdirSync(join(dir, ".tau"), { recursive: true });
   appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "fix-failing-test", mode: "current", totalTokens: 100, elapsedMs: 1000, tools: 2 }) + "\n");
