@@ -828,7 +828,10 @@ export default function tau(pi) {
       active.focusSteered = true;
       pi.sendMessage({ customType: "tau.focus", content: focusLesson(active.files), display: "Tau" }, { deliverAs: "steer" });
     }
-    if (!event.isError) return content ? { content } : undefined;
+    if (!event.isError) {
+      active.errors = active.errors.filter((toolName) => toolName !== event.toolName);
+      return content ? { content } : undefined;
+    }
     active.failedCalls.add(toolCallKey(event));
     if (active.steeredErrors.has(event.toolName)) return content ? { content } : undefined;
     active.steeredErrors.add(event.toolName);

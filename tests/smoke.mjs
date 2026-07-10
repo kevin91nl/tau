@@ -274,6 +274,16 @@ try {
   const failed = handlers.message_end({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Tests passed." }] } }, failedCtx);
   assert.match(failed.message.content[0].text, /Verification guard/);
   handlers.agent_end({}, failedCtx);
+  const recoveredCtx = { cwd: dir, sessionManager: { getSessionId() { return "recovered"; } } };
+  handlers.before_agent_start({ prompt: "Fix tests/live failure", systemPrompt: "base" }, recoveredCtx);
+  handlers.tool_result({ toolName: "edit", isError: true }, recoveredCtx);
+  handlers.tool_result({ toolName: "edit", isError: false }, recoveredCtx);
+  const recovered = handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 }, content: [{ type: "text", text: "Tests passed." }] } }, recoveredCtx);
+  assert.equal(recovered, undefined);
+  handlers.agent_end({}, recoveredCtx);
+  const recoveredRun = JSON.parse(readFileSync(runPath, "utf8").trim().split("\n").at(-1));
+  assert.deepEqual(recoveredRun.errors, []);
+  assert.equal(recoveredRun.trainable, true);
   const ambiguousCtx = { cwd: dir, sessionManager: { getSessionId() { return "ambiguous"; } } };
   const ambiguous = handlers.before_agent_start({ prompt: "Fix it.", systemPrompt: "base" }, ambiguousCtx);
   assert.match(ambiguous.systemPrompt, /Task ambiguous/);
