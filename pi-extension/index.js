@@ -908,6 +908,7 @@ export default function tau(pi) {
       verificationCalls: new Set(),
       verified: false,
       planRevisionRequested: false,
+      planningSteered: false,
       prompt,
       requiresRuntimeProof: needsRuntimeProof(prompt),
       attemptId: `${Date.now().toString(36)}-${++attemptSequence}`,
@@ -987,6 +988,10 @@ export default function tau(pi) {
     if (!failed && !active.focusSteered && active.files.size && active.tools >= 6 && (active.taskKind === "code-fix" || active.taskKind === "implementation")) {
       active.focusSteered = true;
       pi.sendMessage({ customType: "tau.focus", content: focusLesson(active.files), display: "Tau" }, { deliverAs: "steer" });
+    }
+    if (!failed && !active.planningSteered && active.taskKind === "planning" && active.tools >= 3) {
+      active.planningSteered = true;
+      pi.sendMessage({ customType: "tau.plan-focus", content: "Tau plan focus: enough evidence. Stop inspecting and provide the read-only plan now; label any remaining uncertainty as a validation step.", display: "Tau" }, { deliverAs: "steer" });
     }
     if (!failed) {
       active.errors = active.errors.filter((toolName) => toolName !== event.toolName);
