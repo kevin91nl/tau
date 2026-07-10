@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 try {
@@ -124,7 +124,9 @@ try {
   const ctx = { cwd: dir };
   appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "reply-exactly", mode: "current", totalTokens: 100, elapsedMs: 1000, tools: 2 }) + "\n");
   handlers.before_agent_start({ prompt: "Reply exactly: OK", systemPrompt: "base" }, ctx);
+  assert.equal(attemptStats(dir).unfinished, 1);
   handlers.agent_end({}, ctx);
+  assert.equal(attemptStats(dir).unfinished, 0);
   const start = handlers.before_agent_start({ prompt: "Fix failing test", systemPrompt: "base" }, ctx);
   assert.match(start.systemPrompt, /<tau>/);
   handlers.message_end({ message: { role: "assistant", usage: { input: 10, output: 2 } } }, ctx);

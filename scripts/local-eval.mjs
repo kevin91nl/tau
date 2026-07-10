@@ -80,9 +80,14 @@ try {
   const runtime = run("runtime", "Does NaN raise TypeError? Do not use tools.");
   assert.match(runtime, /Evidence guard/, runtime);
 
+  const attempts = rows("attempts.jsonl");
+  const finished = attempts.filter((row) => row.status === "finished");
+  assert.equal(attempts.filter((row) => row.status === "started").length, rows("runs.jsonl").length);
+  assert.equal(finished.length, rows("runs.jsonl").length);
+
   console.log(JSON.stringify({
     status: "ok",
-    cases: ["vague-clarification", "vague-clarification-nl", "clarification-feedback", "concrete-actionability", "sealed-edit", "live-failure-learning", "runtime-evidence-guard"],
+    cases: ["vague-clarification", "vague-clarification-nl", "clarification-feedback", "concrete-actionability", "sealed-edit", "live-failure-learning", "runtime-evidence-guard", "attempt-journal"],
     runs: rows("runs.jsonl").length,
   }));
 } finally {

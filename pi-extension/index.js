@@ -6,6 +6,7 @@ const RUNS = "runs.jsonl";
 const MEMORIES = "memory.jsonl";
 const SESSIONS = "session.jsonl";
 const FEEDBACK = "feedback.jsonl";
+const ATTEMPTS = "attempts.jsonl";
 
 function schema(properties = {}) {
   return { type: "object", properties, additionalProperties: false };
@@ -252,11 +253,23 @@ function status(cwd) {
   return {
     cwd,
     runs: runs.length,
+    attempts: attemptStats(cwd),
     memories: memories.length,
     sessionTurns: sessions.length,
     ambiguity: ambiguityStats(cwd),
     lastBucket: last?.bucket || null,
     lastMode: last?.mode || null,
+  };
+}
+
+function attemptStats(cwd) {
+  const rows = readJsonl(cwd, ATTEMPTS);
+  const started = new Set(rows.filter((row) => row.status === "started").map((row) => row.attemptId));
+  const finished = new Set(rows.filter((row) => row.status === "finished").map((row) => row.attemptId));
+  return {
+    started: started.size,
+    finished: finished.size,
+    unfinished: [...started].filter((attemptId) => !finished.has(attemptId)).length,
   };
 }
 
@@ -352,6 +365,7 @@ function listedMemories(cwd) {
 }
 
 const activeRuns = new Map();
+let attemptSequence = 0;
 
 export default function tau(pi) {
   pi.on("before_agent_start", (event, ctx) => {
@@ -387,6 +401,16 @@ export default function tau(pi) {
       errors: [],
       steeredErrors: new Set(),
       requiresRuntimeProof: needsRuntimeProof(prompt),
+      attemptId: `${Date.now().toString(36)}-${++attemptSequence}`,
+    });
+    appendJsonl(cwd, ATTEMPTS, {
+      ts: new Date().toISOString(),
+      attemptId: activeRuns.get(key).attemptId,
+      sessionId: id,
+      bucket: next.bucket,
+      promptHash: next.promptHash,
+      mode: next.mode,
+      status: "started",
     });
     return { systemPrompt: `${event.systemPrompt}\n\n<tau>\n${next.text}\n</tau>` };
   });
@@ -441,6 +465,14 @@ export default function tau(pi) {
       tools: active.tools,
     };
     appendJsonl(active.cwd, RUNS, run);
+    appendJsonl(active.cwd, ATTEMPTS, {
+      ts: run.ts,
+      attemptId: active.attemptId,
+      status: "finished",
+      totalTokens: run.totalTokens,
+      elapsedMs: run.elapsedMs,
+      tools: run.tools,
+    });
     appendJsonl(active.cwd, SESSIONS, {
       ts: run.ts,
       sessionId: active.sessionId,
@@ -515,4 +547,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, trend, validRuns };
