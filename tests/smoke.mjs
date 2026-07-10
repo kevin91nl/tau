@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, evidenceFooter, failureFooter, feedbackOutcome, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -38,6 +38,8 @@ try {
   assert.equal(needsRuntimeProof("Describe terminal-row behavior from source."), false);
   assert.equal(needsRuntimeProof("Read src/runtime/_dedupe.py."), false);
   assert.equal(needsRuntimeProof("Does it fail at runtime?"), true);
+  const cappedBash = capToolContent([{ type: "text", text: "x".repeat(MAX_BASH_OUTPUT_CHARS + 1) }]);
+  assert.match(cappedBash.at(-1).text, /Tau truncated tool output/);
   assert.match(evidenceFooter(), /cannot verify/);
   assert.match(failureFooter(), /tools failed/);
   const first = instruction(dir, "Fix failing test now");
@@ -144,7 +146,7 @@ try {
   assert.equal(globalStatus("unknown/unknown").runs, 0);
   handlers.before_agent_start({ prompt: "Reply exactly: OK", systemPrompt: "base" }, ctx);
   assert.equal(attemptStats(dir).unfinished, 1);
-  handlers.message_end({ message: { role: "assistant", usage: { input: 10, output: 2 } } }, ctx);
+  handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 10, output: 2 } } }, ctx);
   handlers.agent_end({}, ctx);
   assert.equal(attemptStats(dir).unfinished, 0);
   assert.equal(globalStatus("unknown/unknown").runs, 1);
@@ -158,8 +160,8 @@ try {
   const cappedRead = { toolName: "read", input: { path: "tests/unit/test_company_agent.py" } };
   handlers.tool_call(cappedRead, ctx);
   assert.equal(cappedRead.input.limit, MAX_READ_LINES);
-  handlers.message_end({ message: { role: "assistant", usage: { input: 10, output: 2 } } }, ctx);
   handlers.tool_result({}, ctx);
+  handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 10, output: 2 } } }, ctx);
   handlers.agent_end({}, ctx);
   const runPath = join(dir, ".tau", "runs.jsonl");
   assert.equal(existsSync(runPath), true);
@@ -167,6 +169,8 @@ try {
   assert.equal(persisted.totalTokens, 12);
   assert.equal(persisted.tools, 1);
   assert.equal(persisted.repeats, 0);
+  const autoMemory = listedMemories(dir).at(-1);
+  assert.equal(autoMemory.text.includes("tests/unit/test_company_agent.py"), true);
   const liveCtx = { cwd: dir, sessionManager: { getSessionId() { return "live"; } } };
   handlers.before_agent_start({ prompt: "Fix tests/live failure", systemPrompt: "base" }, liveCtx);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
@@ -176,6 +180,7 @@ try {
   assert.match(sent[0].message.content, /do not repeat unchanged/);
   const blocked = handlers.tool_call({ toolName: "bash", input: {} }, liveCtx);
   assert.equal(blocked.block, true);
+  handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 }, content: [{ type: "text", text: "failed" }] } }, liveCtx);
   handlers.agent_end({}, liveCtx);
   assert.match(sessionLesson(dir, "live"), /failed_tools=bash/);
   appendFileSync(join(dir, ".tau", "session.jsonl"), JSON.stringify({ sessionId: "readcap", tools: 1, readCaps: 1, errors: [], ambiguous: false }) + "\n");
@@ -183,6 +188,11 @@ try {
   const continued = handlers.before_agent_start({ prompt: "Continue", systemPrompt: "base" }, liveCtx);
   assert.match(continued.systemPrompt, /Same session last turn/);
   handlers.agent_end({}, liveCtx);
+  const stalledCtx = { cwd: dir, sessionManager: { getSessionId() { return "stalled"; } } };
+  handlers.before_agent_start({ prompt: "Inspect runtime", systemPrompt: "base" }, stalledCtx);
+  const resumed = handlers.before_agent_start({ prompt: "Continue the task", systemPrompt: "base" }, stalledCtx);
+  assert.match(resumed.systemPrompt, /incomplete prior turn/);
+  handlers.agent_end({}, stalledCtx);
   const evidenceCtx = { cwd: dir, sessionManager: { getSessionId() { return "evidence"; } } };
   handlers.before_agent_start({ prompt: "Does NaN raise TypeError?", systemPrompt: "base" }, evidenceCtx);
   const guarded = handlers.message_end({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "It raises." }] } }, evidenceCtx);
@@ -197,6 +207,7 @@ try {
   const ambiguousCtx = { cwd: dir, sessionManager: { getSessionId() { return "ambiguous"; } } };
   const ambiguous = handlers.before_agent_start({ prompt: "Fix it.", systemPrompt: "base" }, ambiguousCtx);
   assert.match(ambiguous.systemPrompt, /Task ambiguous/);
+  handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 }, content: [{ type: "text", text: "What target and acceptance criteria?" }] } }, ambiguousCtx);
   handlers.agent_end({}, ambiguousCtx);
   const clarified = handlers.before_agent_start({ prompt: "Fix tests/unit/test_json_payload.py", systemPrompt: "base" }, ambiguousCtx);
   assert.match(clarified.systemPrompt, /Same session prior task lacked target/);

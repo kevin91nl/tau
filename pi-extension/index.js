@@ -10,6 +10,7 @@ const FEEDBACK = "feedback.jsonl";
 const ATTEMPTS = "attempts.jsonl";
 const GLOBAL_RUNS = "global-runs.jsonl";
 const MAX_READ_LINES = 240;
+const MAX_BASH_OUTPUT_CHARS = 12_000;
 const GLOBAL_MIN_SAMPLES = 3;
 
 function schema(properties = {}) {
@@ -189,8 +190,8 @@ function validRuns(rows) {
   );
 }
 
-function memoryLimitFor(cwd, hash, mode, simple) {
-  if (simple || mode !== "candidate" || !recentMemories(cwd, 1).length) return 0;
+function memoryLimitFor(cwd, hash, mode, simple, bucket) {
+  if (simple || mode !== "candidate" || !recentMemories(cwd, 1, bucket).length) return 0;
   const rows = validRuns(readJsonl(cwd, RUNS)).filter((row) =>
     row.promptHash === hash && row.mode === "candidate"
   );
@@ -200,8 +201,8 @@ function memoryLimitFor(cwd, hash, mode, simple) {
   return bestMemoryLimit(rows, limits);
 }
 
-function needsMemoryExploration(cwd, hash, simple) {
-  if (simple || !recentMemories(cwd, 1).length) return false;
+function needsMemoryExploration(cwd, hash, simple, bucket) {
+  if (simple || !recentMemories(cwd, 1, bucket).length) return false;
   const rows = validRuns(readJsonl(cwd, RUNS)).filter((row) =>
     row.promptHash === hash && row.mode === "candidate"
   );
@@ -231,12 +232,13 @@ function instruction(cwd, prompt, lesson = "", scope = "default") {
   const simple = isSimplePrompt(prompt);
   const kind = taskKind(prompt);
   const selected = modeForInstruction(cwd, bucket, kind, scope);
-  const mode = needsMemoryExploration(cwd, hash, simple) ? "candidate" : selected.mode;
-  const modeSource = needsMemoryExploration(cwd, hash, simple) ? "project-memory" : selected.modeSource;
+  const exploreMemory = needsMemoryExploration(cwd, hash, simple, bucket);
+  const mode = exploreMemory ? "candidate" : selected.mode;
+  const modeSource = exploreMemory ? "project-memory" : selected.modeSource;
   const maxFiles = mode === "candidate" ? 8 : 16;
   const repeats = repeatCount(cwd, hash);
-  const memoryLimit = memoryLimitFor(cwd, hash, mode, simple);
-  const memories = memoryLimit ? recentMemories(cwd, memoryLimit) : [];
+  const memoryLimit = memoryLimitFor(cwd, hash, mode, simple, bucket);
+  const memories = memoryLimit ? recentMemories(cwd, memoryLimit, bucket) : [];
   const ambiguity = ambiguityReason(prompt);
   return {
     bucket,
@@ -258,6 +260,7 @@ function instruction(cwd, prompt, lesson = "", scope = "default") {
       lesson,
       "Before tools, assess scope. If target or observable acceptance criteria are missing, ask one concise clarification and wait; do not inspect first.",
       `Context budget: use grep to locate symbols, then read only the needed range. Tau caps each read at ${MAX_READ_LINES} lines; if output is truncated, grep and reread a narrow offset.`,
+      `For source inspection, prefer read with an offset/limit. Do not use bash cat on broad files; Tau caps bash output at ${MAX_BASH_OUTPUT_CHARS} characters.`,
       "For technical conclusions, state only facts proven by files or tool output. Do not infer library defaults, exception types, or test coverage; mark unsupported behavior unverified without speculation.",
       "Keep context small. Read only files needed. Prefer targeted grep/read over broad scans.",
       "Do not mention Tau unless the user asks.",
@@ -304,7 +307,7 @@ function ambiguityReason(prompt) {
 
 function ambiguityGuidance(reason) {
   if (!reason) return "";
-  return `Task ambiguous: ${reason}. Do not inspect files or propose commands. Ask one concise clarification for target and acceptance criteria, then wait.`;
+  return `Task ambiguous: ${reason}. Your entire answer must be one concise question for target and acceptance criteria. Do not inspect files, give a plan, name files, or propose commands. Then wait.`;
 }
 
 function status(cwd, scope = "default") {
@@ -345,6 +348,13 @@ function attemptStats(cwd) {
   };
 }
 
+function hasIncompleteAttempt(cwd, id) {
+  const rows = readJsonl(cwd, ATTEMPTS);
+  const started = new Set(rows.filter((row) => row.sessionId === id && row.status === "started").map((row) => row.attemptId));
+  const finished = new Set(rows.filter((row) => row.status === "finished").map((row) => row.attemptId));
+  return [...started].some((attemptId) => !finished.has(attemptId));
+}
+
 function lastSessionEntry(cwd, id) {
   return readJsonl(cwd, SESSIONS).filter((row) => row.sessionId === id).at(-1);
 }
@@ -369,6 +379,7 @@ function ambiguityStats(cwd) {
 
 function sessionLesson(cwd, id) {
   const last = lastSessionEntry(cwd, id);
+  if (hasIncompleteAttempt(cwd, id)) return "Same session has an incomplete prior turn. Resume from its existing tool evidence; do not restart broad exploration.";
   if (!last || (!last.tools && !last.errors?.length && !last.ambiguous)) return "";
   if (last.errors?.length) return `Same session last turn: tools=${last.tools}; failed_tools=${last.errors.join(",")}. Reuse known results; do not repeat failed calls unchanged.`;
   if (last.ambiguous) return "Same session prior task lacked target and acceptance criteria. Use the user's clarification before acting.";
@@ -382,6 +393,25 @@ function liveLesson(toolName) {
 
 function toolCallKey(event) {
   return `${event.toolName}:${JSON.stringify(event.input || {})}`;
+}
+
+function capToolContent(content, limit = MAX_BASH_OUTPUT_CHARS) {
+  if (!Array.isArray(content)) return undefined;
+  let remaining = limit;
+  let truncated = false;
+  const capped = content.map((block) => {
+    if (block?.type !== "text" || typeof block.text !== "string") return block;
+    if (block.text.length <= remaining) {
+      remaining -= block.text.length;
+      return block;
+    }
+    truncated = true;
+    const text = block.text.slice(0, Math.max(0, remaining));
+    remaining = 0;
+    return { ...block, text };
+  });
+  if (!truncated) return undefined;
+  return [...capped, { type: "text", text: `\n\n[Tau truncated tool output at ${limit} characters. Use a narrower command or offset.]` }];
 }
 
 function policyScope(ctx) {
@@ -410,12 +440,30 @@ function withFooter(message, footer, prefix = false) {
   };
 }
 
-function recentMemories(cwd, limit = 3) {
+function recentMemories(cwd, limit = 3, bucket = "") {
   return readMemoryJsonl(cwd)
+    .filter((row) => !row.bucket || row.bucket === bucket)
     .map((row) => safeMemoryText(row.text))
     .filter(Boolean)
     .slice(-limit)
     .map((text) => text.slice(0, 160));
+}
+
+function sourcePath(input) {
+  const path = String(input?.path || "");
+  if (!path || /(^|\/)(node_modules|\.git|\.tau)(\/|$)/.test(path)) return "";
+  return /\.[a-z0-9]+$/i.test(path) ? path.slice(0, 180) : "";
+}
+
+function appendAutoReflection(active) {
+  if (active.ambiguity || active.errors.length || !active.files.size) return;
+  const files = [...active.files].slice(0, 3);
+  appendJsonl(active.cwd, MEMORIES, {
+    ts: new Date().toISOString(),
+    auto: true,
+    bucket: active.bucket,
+    text: `Recent completed navigation for ${active.bucket}: start with ${files.join(", ")} when relevant.`,
+  });
 }
 
 function memoryPrompt(memories) {
@@ -468,6 +516,7 @@ function finishActiveRun(key) {
     totalTokens: active.inputTokens + active.outputTokens,
     tools: active.tools,
     readCaps: active.readCaps,
+    outputCaps: active.outputCaps,
   };
   appendJsonl(active.cwd, RUNS, run);
   appendGlobalRun({
@@ -480,6 +529,7 @@ function finishActiveRun(key) {
     elapsedMs: run.elapsedMs,
     tools: run.tools,
     readCaps: run.readCaps,
+    outputCaps: run.outputCaps,
   });
   appendJsonl(active.cwd, ATTEMPTS, {
     ts: run.ts,
@@ -493,9 +543,33 @@ function finishActiveRun(key) {
     ts: run.ts,
     sessionId: active.sessionId,
     tools: active.tools,
+    outputCaps: active.outputCaps,
     readCaps: active.readCaps,
     errors: active.errors,
     ambiguous: Boolean(active.ambiguity),
+  });
+  appendAutoReflection(active);
+}
+
+function interruptActiveRun(key) {
+  const active = activeRuns.get(key);
+  if (!active) return;
+  activeRuns.delete(key);
+  appendJsonl(active.cwd, ATTEMPTS, {
+    ts: new Date().toISOString(),
+    attemptId: active.attemptId,
+    status: "interrupted",
+    tools: active.tools,
+  });
+  appendJsonl(active.cwd, SESSIONS, {
+    ts: new Date().toISOString(),
+    sessionId: active.sessionId,
+    tools: active.tools,
+    outputCaps: active.outputCaps,
+    readCaps: active.readCaps,
+    errors: active.errors,
+    ambiguous: Boolean(active.ambiguity),
+    interrupted: true,
   });
 }
 
@@ -535,9 +609,11 @@ export default function tau(pi) {
       outputTokens: 0,
       tools: 0,
       readCaps: 0,
+      outputCaps: 0,
       errors: [],
       steeredErrors: new Set(),
       failedCalls: new Set(),
+      files: new Set(),
       requiresRuntimeProof: needsRuntimeProof(prompt),
       attemptId: `${Date.now().toString(36)}-${++attemptSequence}`,
     });
@@ -575,9 +651,11 @@ export default function tau(pi) {
     const active = activeRuns.get(runKey(ctx));
     if (!active) return;
     active.tools += 1;
-    if (!event.isError) return;
+    const content = event.toolName === "bash" ? capToolContent(event.content) : undefined;
+    if (content) active.outputCaps += 1;
+    if (!event.isError) return content ? { content } : undefined;
     active.failedCalls.add(toolCallKey(event));
-    if (active.steeredErrors.has(event.toolName)) return;
+    if (active.steeredErrors.has(event.toolName)) return content ? { content } : undefined;
     active.steeredErrors.add(event.toolName);
     active.errors.push(event.toolName);
     pi.sendMessage({
@@ -585,10 +663,13 @@ export default function tau(pi) {
       content: liveLesson(event.toolName),
       display: "Tau",
     }, { deliverAs: "steer" });
+    return content ? { content } : undefined;
   });
 
   pi.on("tool_call", (event, ctx) => {
     const active = activeRuns.get(runKey(ctx));
+    const path = sourcePath(event.input);
+    if (active && path) active.files.add(path);
     if (event.toolName === "read") {
       const requested = Number(event.input?.limit);
       if (!Number.isFinite(requested) || requested <= 0 || requested > MAX_READ_LINES) {
@@ -602,7 +683,7 @@ export default function tau(pi) {
   });
 
   pi.on("agent_end", (_event, ctx) => {
-    finishActiveRun(runKey(ctx));
+    interruptActiveRun(runKey(ctx));
   });
 
   pi.registerTool({
@@ -670,4 +751,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, globalModeFor, globalStatus, globalTauDir, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, needsRuntimeProof, needsMemoryExploration, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, needsRuntimeProof, needsMemoryExploration, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, status, taskKind, tauDir, toolCallKey, trend, validRuns };

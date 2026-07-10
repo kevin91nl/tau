@@ -17,7 +17,7 @@ pi "fix this bug"
 - records tokens, elapsed time, and tool count in `.tau/runs.jsonl`
 - tries a smaller `candidate` mode after one baseline run
 - keeps the mode with better token/time medians after enough runs
-- stores optional local project memories in `.tau/memory.jsonl`
+- automatically derives compact, bucket-scoped navigation hints from completed tool evidence
 - learns within a Pi session: one compact error steer, then a next-turn session hint
 - asks for target and acceptance criteria before acting on clearly ambiguous tasks
 - learns memory count per exact prompt: tests `0`, `1`, then `3` short hints; keeps only a Pareto-better option
@@ -26,7 +26,9 @@ pi "fix this bug"
 
 Tau is local-only. No daemon. No database. No embeddings. No external service.
 
-Learning is automatic. Every normally completed Pi task records local metrics and an aggregate global policy row; no slash command, manual memory write, or background model call is needed. Incomplete tasks remain visible in the attempt journal but never train the policy.
+Learning is automatic. Every normally completed Pi task records local metrics, an aggregate global policy row, and, when Pi touched explicit source files, one compact local navigation hint for a later similar task. No slash command, manual memory write, or background model call is needed. Incomplete tasks remain visible in the attempt journal but never train the policy or create a memory.
+
+Tau deliberately does not ask a second model to summarize every turn. That would add latency and tokens before the next user-visible result. It uses deterministic evidence from the completed run instead: task bucket plus up to three explicit source paths. These hints are only injected for the same bucket and only when the measured memory experiment selects them.
 
 ## Global Learning
 
@@ -80,7 +82,7 @@ Tau writes only inside the current project:
 
 ```text
 .tau/runs.jsonl    # measured runs
-.tau/memory.jsonl  # optional short hints
+.tau/memory.jsonl  # automatic bucket-scoped hints; optional manual factual hints
 .tau/session.jsonl # tool/error metadata for current Pi sessions
 .tau/feedback.jsonl # derived clarification/outcome signals
 .tau/attempts.jsonl # started/finished run journal; exposes interrupted runs
