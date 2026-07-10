@@ -12,6 +12,8 @@ const GLOBAL_RUNS = "global-runs.jsonl";
 const MAX_READ_LINES = 240;
 const MAX_BASH_OUTPUT_CHARS = 12_000;
 const MAX_SYSTEM_PROMPT_CHARS = 14_000;
+const MAX_TRAINABLE_TOKENS = 250_000;
+const MAX_TRAINABLE_TOOLS = 16;
 const GLOBAL_MIN_SAMPLES = 3;
 
 function schema(properties = {}) {
@@ -218,8 +220,15 @@ function validRuns(rows) {
   return rows.filter((row) =>
     Number(row.totalTokens) > 0 &&
     Number(row.elapsedMs) > 0 &&
-    (row.mode === "current" || row.mode === "candidate")
+    (row.mode === "current" || row.mode === "candidate") &&
+    isTrainableRun(row)
   );
+}
+
+function isTrainableRun(row) {
+  return row.trainable !== false &&
+    Number(row.totalTokens) <= MAX_TRAINABLE_TOKENS &&
+    Number(row.tools || 0) <= MAX_TRAINABLE_TOOLS;
 }
 
 function memoryLimitFor(cwd, hash, mode, simple, bucket) {
@@ -608,6 +617,7 @@ function finishActiveRun(key) {
     outputCaps: active.outputCaps,
     contextPrunes: active.contextPrunes,
   };
+  run.trainable = isTrainableRun(run);
   appendJsonl(active.cwd, RUNS, run);
   appendGlobalRun({
     ts: run.ts,
@@ -881,4 +891,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
