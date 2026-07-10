@@ -350,6 +350,9 @@ try {
   assert.match(planning.systemPrompt, /Planning task/);
   assert.match(planning.systemPrompt, /Do not invent API fields/);
   assert.equal(handlers.tool_call({ toolName: "edit", input: { path: "src/app.js" } }, planCtx).block, true);
+  handlers.tool_result({ toolName: "read", isError: false, content: [{ type: "text", text: "export const knownThing = true;" }] }, planCtx);
+  handlers.message_end({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Change `unknownThing`." }] } }, planCtx);
+  assert.equal(sent.at(-1).message.customType, "tau.plan-revise");
   handlers.agent_end({}, planCtx);
 } finally {
   if (priorTauHome === undefined) delete process.env.TAU_HOME;

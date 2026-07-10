@@ -907,6 +907,7 @@ export default function tau(pi) {
       observedSymbols: new Set(),
       verificationCalls: new Set(),
       verified: false,
+      planRevisionRequested: false,
       prompt,
       requiresRuntimeProof: needsRuntimeProof(prompt),
       attemptId: `${Date.now().toString(36)}-${++attemptSequence}`,
@@ -933,11 +934,21 @@ export default function tau(pi) {
       active.outputTokens += Number(msg.usage.output || 0);
     }
     if (msg.stopReason !== "stop") return;
-    finishActiveRun(runKey(ctx));
     if (active.errors.length) {
+      finishActiveRun(runKey(ctx));
       return { message: withFooter(msg, failureFooter(), true) };
     }
     const unverifiedSymbols = unverifiedSymbolFooter(msg, active.observedSymbols);
+    if (unverifiedSymbols && active.taskKind === "planning" && !active.planRevisionRequested) {
+      active.planRevisionRequested = true;
+      pi.sendMessage({
+        customType: "tau.plan-revise",
+        content: "Revise the plan once: remove unsupported API/structure claims, or label them unknown and make them explicit validation steps. Keep the plan concise and read-only.",
+        display: "Tau",
+      }, { deliverAs: "followUp", triggerTurn: true });
+      return { message: withFooter(msg, unverifiedSymbols, true) };
+    }
+    finishActiveRun(runKey(ctx));
     if (unverifiedSymbols) {
       return { message: withFooter(msg, unverifiedSymbols, true) };
     }
