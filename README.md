@@ -34,6 +34,8 @@ TauProposalLatest
 TauProposalApply
 TauProposalDiscard
 TauABRecord
+TauMeasureRecord
+TauTrend
 TauLocateRead
 TauMemoryPack
 TauSecretScan
@@ -72,6 +74,14 @@ python -m tau_cli.main proposal discard
 
 ```bash
 python -m tau_cli.main ab record --name pack_speed --baseline "10.0,12.0,11.0" --candidate "8.0,9.0,8.5"
+```
+
+### Measurement/trend commands
+
+```bash
+python -m tau_cli.main measure record --bucket fix-test --mode baseline --accepted --input-tokens 12000 --output-tokens 800 --time-to-acceptance-s 90
+python -m tau_cli.main measure record --bucket fix-test --mode candidate --accepted --input-tokens 9000 --output-tokens 500 --time-to-acceptance-s 60
+python -m tau_cli.main trend --bucket fix-test
 ```
 
 ### Compound/reviewer commands

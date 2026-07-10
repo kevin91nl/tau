@@ -14,7 +14,7 @@ from tau_core.lmstudio import doctor as lm_doctor
 from tau_core.locate_read import locate_read
 from tau_core.memory import add_card, cards
 from tau_core.memory_pack import pack_memory
-from tau_core.metrics import Timer
+from tau_core.metrics import Timer, record_measurement, summarize_trends
 from tau_core.proposals import apply_proposal, create_proposal, discard_proposal, latest_proposal
 from tau_core.proposal_check import check_proposal
 from tau_core.resources import preflight
@@ -160,6 +160,49 @@ def cmd_ab_record(args: argparse.Namespace) -> int:
     candidate = [float(x) for x in args.candidate.split(",")]
     obj = write_artifact(root, name=args.name, baseline=baseline, candidate=candidate, metric=args.metric)
     print(json.dumps(obj, indent=2))
+    return 0
+
+
+def cmd_measure_record(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    obj = record_measurement(
+        root,
+        bucket=args.bucket,
+        mode=args.mode,
+        accepted=args.accepted,
+        input_tokens=args.input_tokens,
+        output_tokens=args.output_tokens,
+        elapsed_s=args.elapsed_s,
+        time_to_acceptance_s=args.time_to_acceptance_s,
+        rework_count=args.rework_count,
+        files_changed=args.files_changed,
+        loc_added=args.loc_added,
+        loc_deleted=args.loc_deleted,
+        safety_flags=args.safety_flags,
+    )
+    print(json.dumps(obj, indent=2))
+    return 0
+
+
+def cmd_trend(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    obj = summarize_trends(root, bucket=args.bucket)
+    if args.json:
+        print(json.dumps(obj, indent=2, sort_keys=True))
+        return 0
+    print("bucket | mode | n | accept_rate | median_tta_s | median_tokens")
+    for bucket, data in obj["buckets"].items():
+        for mode, stats in data.items():
+            if mode == "improvement":
+                continue
+            print(
+                f"{bucket} | {mode} | {stats['n']} | {stats['accept_rate']:.2f} | "
+                f"{stats['median_time_to_acceptance_s']} | {stats['median_total_tokens']}"
+            )
+        imp = data.get("improvement")
+        if imp:
+            print(f"{bucket} | improvement | claim_ready={imp['claim_ready']} | time={imp['time_to_acceptance_ratio']} | tokens={imp['total_tokens_ratio']}")
     return 0
 
 
@@ -382,6 +425,28 @@ def parser() -> argparse.ArgumentParser:
     ar.add_argument("--candidate", required=True)
     ar.add_argument("--metric", default="time_to_acceptance_s")
 
+    meas = sub.add_parser("measure")
+    meas_sub = meas.add_subparsers(dest="measure_cmd", required=True)
+    mr = meas_sub.add_parser("record")
+    add_common(mr)
+    mr.add_argument("--bucket", required=True)
+    mr.add_argument("--mode", choices=["baseline", "current", "candidate"], required=True)
+    mr.add_argument("--accepted", action="store_true")
+    mr.add_argument("--input-tokens", type=int, default=0)
+    mr.add_argument("--output-tokens", type=int, default=0)
+    mr.add_argument("--elapsed-s", type=float, default=0)
+    mr.add_argument("--time-to-acceptance-s", type=float)
+    mr.add_argument("--rework-count", type=int, default=0)
+    mr.add_argument("--files-changed", type=int, default=0)
+    mr.add_argument("--loc-added", type=int, default=0)
+    mr.add_argument("--loc-deleted", type=int, default=0)
+    mr.add_argument("--safety-flags", type=int, default=0)
+
+    trend = sub.add_parser("trend")
+    add_common(trend)
+    trend.add_argument("--bucket")
+    trend.add_argument("--json", action="store_true")
+
     # locate-read compound command
     lr = sub.add_parser("locate-read")
     add_common(lr)
@@ -453,6 +518,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "ab":
         if args.ab_cmd == "record":
             return cmd_ab_record(args)
+    if args.cmd == "measure":
+        if args.measure_cmd == "record":
+            return cmd_measure_record(args)
+    if args.cmd == "trend":
+        return cmd_trend(args)
     if args.cmd == "locate-read":
         return cmd_locate_read(args)
     if args.cmd == "memory-pack":

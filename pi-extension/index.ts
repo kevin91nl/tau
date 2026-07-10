@@ -202,6 +202,53 @@ export default function(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "TauMeasureRecord",
+    label: "Tau Measure Record",
+    description: "Record measured outcome metrics: tokens, time-to-acceptance, acceptance, diff size, safety flags.",
+    parameters: Type.Object({
+      bucket: Type.String(),
+      mode: Type.String(),
+      accepted: Type.Optional(Type.Boolean()),
+      inputTokens: Type.Optional(Type.Number()),
+      outputTokens: Type.Optional(Type.Number()),
+      elapsedS: Type.Optional(Type.Number()),
+      timeToAcceptanceS: Type.Optional(Type.Number()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args = [
+        "measure", "record",
+        "--bucket", String(params.bucket),
+        "--mode", String(params.mode),
+        "--input-tokens", String(params.inputTokens ?? 0),
+        "--output-tokens", String(params.outputTokens ?? 0),
+        "--elapsed-s", String(params.elapsedS ?? 0),
+        "--cwd", cwd
+      ];
+      if (params.accepted) args.push("--accepted");
+      if (params.timeToAcceptanceS !== undefined) args.push("--time-to-acceptance-s", String(params.timeToAcceptanceS));
+      return textResult(runTau(args, cwd).text);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauTrend",
+    label: "Tau Trend",
+    description: "Show trend report by bucket: tokens, time-to-acceptance, accept rate, claim readiness.",
+    parameters: Type.Object({
+      bucket: Type.Optional(Type.String()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args = ["trend", "--cwd", cwd];
+      if (params.bucket) args.push("--bucket", String(params.bucket));
+      return textResult(runTau(args, cwd).text);
+    }
+  });
+
+  pi.registerTool({
     name: "TauLocateRead",
     label: "Tau Locate Read",
     description: "Compound deterministic tool: locate files by glob and read bounded content.",
@@ -275,6 +322,8 @@ export default function(pi: ExtensionAPI) {
         "- TauProposalApply: apply the latest proposal",
         "- TauProposalDiscard: discard the latest proposal",
         "- TauABRecord: record an A/B comparison result",
+        "- TauMeasureRecord: record outcome metrics",
+        "- TauTrend: show measured improvement trends",
         "- TauLocateRead: deterministic locate+read",
         "- TauMemoryPack: compact scoped memory",
         "- TauSecretScan: scan for secrets",
