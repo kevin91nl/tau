@@ -240,7 +240,7 @@ function memoryLimitFor(cwd, hash, mode, simple, bucket) {
   const rows = validRuns(readJsonl(cwd, RUNS)).filter((row) =>
     row.promptHash === hash && row.mode === "candidate"
   );
-  const limits = [0, 1, 3];
+  const limits = memoryLimitsFor(cwd, bucket);
   const untried = limits.find((limit) => !rows.some((row) => Number(row.memoryLimit || 0) === limit));
   if (untried !== undefined) return untried;
   return bestMemoryLimit(rows, limits);
@@ -252,7 +252,12 @@ function needsMemoryExploration(cwd, hash, simple, bucket) {
     row.promptHash === hash && row.mode === "candidate"
   );
   if (!rows.length) return false;
-  return [0, 1, 3].some((limit) => !rows.some((row) => Number(row.memoryLimit || 0) === limit));
+  return memoryLimitsFor(cwd, bucket).some((limit) => !rows.some((row) => Number(row.memoryLimit || 0) === limit));
+}
+
+function memoryLimitsFor(cwd, bucket) {
+  const count = recentMemories(cwd, Number.MAX_SAFE_INTEGER, bucket).length;
+  return [0, 1, 3].filter((limit) => limit === 0 || limit <= count);
 }
 
 function bestMemoryLimit(rows, limits = [0, 1, 3]) {
@@ -548,10 +553,16 @@ function withFooter(message, footer, prefix = false) {
 }
 
 function recentMemories(cwd, limit = 3, bucket = "") {
+  const seen = new Set();
   return readMemoryJsonl(cwd)
     .filter((row) => !row.bucket || row.bucket === bucket)
     .map((row) => safeMemoryText(row.text))
     .filter(Boolean)
+    .filter((text) => {
+      if (seen.has(text)) return false;
+      seen.add(text);
+      return true;
+    })
     .slice(-limit)
     .map((text) => text.slice(0, 160));
 }
@@ -594,11 +605,13 @@ function normalizeMacSed(command, platform = process.platform) {
 function appendAutoReflection(active) {
   if (active.ambiguity || active.errors.length || !active.files.size) return;
   const files = [...active.files].slice(0, 3);
+  const text = `Recent completed navigation for ${active.bucket}: start with ${files.join(", ")} when relevant.`;
+  if (recentMemories(active.cwd, Number.MAX_SAFE_INTEGER, active.bucket).includes(text)) return;
   appendJsonl(active.cwd, MEMORIES, {
     ts: new Date().toISOString(),
     auto: true,
     bucket: active.bucket,
-    text: `Recent completed navigation for ${active.bucket}: start with ${files.join(", ")} when relevant.`,
+    text,
   });
 }
 
@@ -968,4 +981,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, parallelOneInstance, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, parallelOneInstance, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };

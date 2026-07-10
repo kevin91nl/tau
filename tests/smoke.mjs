@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, parallelOneInstance, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, parallelOneInstance, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -96,6 +96,9 @@ try {
     "Keep grep targeted to src and package manifests.",
     "This memory should be included as the newest third item.",
   ]);
+  appendFileSync(join(dir, ".tau", "memory.jsonl"), JSON.stringify({ text: "Keep grep targeted to src and package manifests." }) + "\n");
+  assert.equal(recentMemories(dir, 10).filter((text) => text === "Keep grep targeted to src and package manifests.").length, 1);
+  assert.deepEqual(memoryLimitsFor(dir, "fix-failing-test"), [0, 1, 3]);
   const candidateInstruction = instruction(dir, "Fix failing test now");
   assert.match(candidateInstruction.text, /memory_k=0/);
   appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "fix-failing-test", promptHash: promptHash("Fix failing test now"), mode: "candidate", memoryLimit: 0, totalTokens: 80, elapsedMs: 900, tools: 1 }) + "\n");
