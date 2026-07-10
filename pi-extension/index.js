@@ -14,6 +14,7 @@ const MAX_BASH_OUTPUT_CHARS = 12_000;
 const MAX_SYSTEM_PROMPT_CHARS = 14_000;
 const MAX_TRAINABLE_TOKENS = 250_000;
 const MAX_TRAINABLE_TOOLS = 16;
+const MEMORY_ABORT_RATIO = 1.2;
 const GLOBAL_MIN_SAMPLES = 3;
 const LM_STUDIO_URL = process.env.TAU_LMSTUDIO_URL || "http://127.0.0.1:1234";
 const LM_STUDIO_TIMEOUT_MS = 750;
@@ -257,7 +258,19 @@ function needsMemoryExploration(cwd, hash, simple, bucket) {
     row.promptHash === hash && row.mode === "candidate"
   );
   if (!rows.length) return false;
+  if (hasMateriallyWorseMemoryTrial(cwd, hash)) return false;
   return memoryLimitsFor(cwd, bucket).some((limit) => !rows.some((row) => Number(row.memoryLimit || 0) === limit));
+}
+
+function hasMateriallyWorseMemoryTrial(cwd, hash) {
+  const rows = validRuns(readJsonl(cwd, RUNS)).filter((row) => row.promptHash === hash);
+  const baseline = rows.filter((row) => Number(row.memoryLimit || 0) === 0);
+  if (!baseline.length) return false;
+  const baselineTokens = median(baseline.map((row) => row.totalTokens)) ?? Infinity;
+  const baselineElapsed = median(baseline.map((row) => row.elapsedMs)) ?? Infinity;
+  return rows.some((row) => Number(row.memoryLimit || 0) > 0 &&
+    row.totalTokens > baselineTokens * MEMORY_ABORT_RATIO &&
+    row.elapsedMs > baselineElapsed * MEMORY_ABORT_RATIO);
 }
 
 function memoryLimitsFor(cwd, bucket) {
@@ -661,7 +674,9 @@ function normalizeMacSed(command, platform = process.platform) {
 }
 
 function appendAutoReflection(active) {
-  if (!active.accepted || active.ambiguity || active.errors.length || !active.files.size) return;
+  // Memory trials must not feed themselves. Only accepted no-memory work can
+  // create a navigation hint for a later trial.
+  if (!active.accepted || active.memoryLimit > 0 || active.ambiguity || active.errors.length || !active.files.size) return;
   const files = [...active.files].slice(0, 3).map((path) => projectRelativePath(active.cwd, path));
   const text = `Recent completed navigation for ${active.bucket}: start with ${files.join(", ")} when relevant.`;
   if (recentMemories(active.cwd, Number.MAX_SAFE_INTEGER, active.bucket).includes(text)) return;
@@ -1078,4 +1093,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashOutputFailed, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isDirectTestRead, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isFocusedTestSearch, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, sourcePathsFromContent, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashOutputFailed, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, hasMateriallyWorseMemoryTrial, instruction, interruptActiveRun, isDirectTestRead, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isFocusedTestSearch, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, sourcePathsFromContent, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };

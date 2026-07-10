@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bashOutputFailed, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isDirectTestRead, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isFocusedTestSearch, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, sourcePathsFromContent, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bashOutputFailed, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, hasMateriallyWorseMemoryTrial, instruction, isDirectTestRead, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isFocusedTestSearch, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, sourcePathsFromContent, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -131,6 +131,15 @@ try {
   }
   assert.equal(bestMemoryLimit(validRuns(readFileSync(join(dir, ".tau", "runs.jsonl"), "utf8").trim().split("\n").map(JSON.parse)).filter((row) => row.promptHash === memoryHash)), 3);
   assert.equal(memoryLimitFor(dir, memoryHash, "candidate", false), 3);
+  const abortMemoryDir = mkdtempSync(join(tmpdir(), "tau-memory-abort-"));
+  mkdirSync(join(abortMemoryDir, ".tau"), { recursive: true });
+  appendFileSync(join(abortMemoryDir, ".tau", "memory.jsonl"), JSON.stringify({ text: "Start with src/app.py." }) + "\n");
+  const abortHash = promptHash("Repeat memory abort");
+  appendFileSync(join(abortMemoryDir, ".tau", "runs.jsonl"), JSON.stringify({ promptHash: abortHash, mode: "candidate", memoryLimit: 0, totalTokens: 100, elapsedMs: 1000 }) + "\n");
+  appendFileSync(join(abortMemoryDir, ".tau", "runs.jsonl"), JSON.stringify({ promptHash: abortHash, mode: "candidate", memoryLimit: 1, totalTokens: 130, elapsedMs: 1300 }) + "\n");
+  assert.equal(hasMateriallyWorseMemoryTrial(abortMemoryDir, abortHash), true);
+  assert.equal(needsMemoryExploration(abortMemoryDir, abortHash, false, "repeat-memory-abort"), false);
+  rmSync(abortMemoryDir, { recursive: true, force: true });
   const memoryModeDir = mkdtempSync(join(tmpdir(), "tau-memory-mode-"));
   mkdirSync(join(memoryModeDir, ".tau"), { recursive: true });
   appendFileSync(join(memoryModeDir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "memory-mode", mode: "current", totalTokens: 100, elapsedMs: 1000 }) + "\n");
