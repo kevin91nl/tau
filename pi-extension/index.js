@@ -726,6 +726,7 @@ export default function tau(pi) {
       steeredErrors: new Set(),
       semanticSteers: new Set(),
       actionRequired: false,
+      autoResumed: false,
       focusSteered: false,
       failedCalls: new Set(),
       seenExplorationCalls: new Set(),
@@ -847,7 +848,18 @@ export default function tau(pi) {
   });
 
   pi.on("agent_end", (_event, ctx) => {
-    interruptActiveRun(runKey(ctx));
+    const key = runKey(ctx);
+    const active = activeRuns.get(key);
+    if (active && active.tools > 0 && !active.autoResumed) {
+      active.autoResumed = true;
+      pi.sendMessage({
+        customType: "tau.resume",
+        content: "Tau resume: continue from existing tool evidence. Complete the smallest remaining edit or verification; do not restart exploration.",
+        display: "Tau",
+      }, { deliverAs: "followUp", triggerTurn: true });
+      return;
+    }
+    interruptActiveRun(key);
   });
 
   pi.registerTool({

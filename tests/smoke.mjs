@@ -205,6 +205,14 @@ try {
   const autoMemory = listedMemories(dir).at(-1);
   assert.equal(autoMemory.text.includes("tests/unit/test_company_agent.py"), true);
   const liveCtx = { cwd: dir, sessionManager: { getSessionId() { return "live"; } } };
+  const resumeCtx = { cwd: dir, sessionManager: { getSessionId() { return "resume"; } } };
+  handlers.before_agent_start({ prompt: "Target: app.js. Acceptance: inspect it.", systemPrompt: "base" }, resumeCtx);
+  handlers.tool_result({ toolName: "bash", isError: false }, resumeCtx);
+  handlers.agent_end({}, resumeCtx);
+  assert.equal(sent.at(-1).message.customType, "tau.resume");
+  assert.equal(sent.at(-1).options.deliverAs, "followUp");
+  handlers.agent_end({}, resumeCtx);
+  assert.equal(attemptStats(dir).unfinished >= 1, true);
   const invariantCtx = { cwd: dir, sessionManager: { getSessionId() { return "invariant"; } } };
   handlers.before_agent_start({ prompt: "Target: runtime predicate. Acceptance: repair it.", systemPrompt: "base" }, invariantCtx);
   handlers.tool_result({ toolName: "read", isError: false, content: [{ type: "text", text: "def item_is_open(x):\n return x not in open_statuses" }] }, invariantCtx);
@@ -225,7 +233,7 @@ try {
   assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "grep -rn dedupe src" } }, liveCtx).block, true);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
-  assert.equal(sent.length, 3);
+  assert.equal(sent.length, 4);
   assert.equal(sent.at(-1).options.deliverAs, "steer");
   assert.match(sent.at(-1).message.content, /do not repeat unchanged/);
   const blocked = handlers.tool_call({ toolName: "bash", input: {} }, liveCtx);
