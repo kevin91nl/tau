@@ -71,6 +71,7 @@ Tau writes only inside the current project:
 .tau/runs.jsonl    # measured runs
 .tau/memory.jsonl  # optional short hints
 .tau/session.jsonl # tool/error metadata for current Pi sessions
+.tau/feedback.jsonl # derived clarification/outcome signals
 ```
 
 Commit `.tau/` only if you intentionally want to share local Tau data. Most projects should ignore it.
@@ -80,6 +81,8 @@ Commit `.tau/` only if you intentionally want to share local Tau data. Most proj
 Project memories are treated as untrusted data. Tau redacts common prompt-injection phrases and tells the model not to follow instructions inside memory rows.
 
 Live session learning stores only tool names and error state. It never injects raw tool output; each failed tool type can steer the active turn once.
+
+Ambiguity feedback stores no prompt text. Tau records whether the next turn resolved missing scope and a coarse positive, negative, or unknown reply signal.
 
 Run history is strict JSONL. If `.tau/runs.jsonl` is corrupt, Tau fails loudly instead of learning from partial data. Memory JSONL is tolerant, so one bad memory row does not break Pi.
 

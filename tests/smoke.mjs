@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, bestMemoryLimit, bucketFromPrompt, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 try {
@@ -19,7 +19,13 @@ try {
   assert.match(liveLesson("bash"), /bash failed/);
   assert.equal(ambiguityReason("Fix it."), "target and acceptance criteria missing");
   assert.equal(ambiguityReason("Improve performance."), "target and acceptance criteria missing");
+  assert.equal(ambiguityReason("Sort out the onboarding situation for launch"), "target and acceptance criteria missing");
+  assert.equal(ambiguityReason("Make the user journey less confusing without breaking anything important"), "target and acceptance criteria missing");
+  assert.equal(ambiguityReason("Target: CI. Acceptance: no blocked jobs."), "");
   assert.equal(ambiguityReason("Fix tests/unit/test_json_payload.py"), "");
+  assert.equal(feedbackOutcome("Perfect, this works"), "positive");
+  assert.equal(feedbackOutcome("Nee, dit werkt niet"), "negative");
+  assert.equal(feedbackOutcome("Acceptance: no blocked jobs remain"), "unknown");
   const first = instruction(dir, "Fix failing test now");
   assert.equal(first.mode, "current");
   assert.deepEqual(trend(dir), {});
@@ -122,7 +128,7 @@ try {
   assert.equal(persisted.tools, 1);
   assert.equal(persisted.repeats, 0);
   const liveCtx = { cwd: dir, sessionManager: { getSessionId() { return "live"; } } };
-  handlers.before_agent_start({ prompt: "Fix live failure", systemPrompt: "base" }, liveCtx);
+  handlers.before_agent_start({ prompt: "Fix tests/live failure", systemPrompt: "base" }, liveCtx);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
   assert.equal(sent.length, 1);
@@ -139,6 +145,7 @@ try {
   handlers.agent_end({}, ambiguousCtx);
   const clarified = handlers.before_agent_start({ prompt: "Fix tests/unit/test_json_payload.py", systemPrompt: "base" }, ambiguousCtx);
   assert.match(clarified.systemPrompt, /Same session prior task lacked target/);
+  assert.deepEqual(ambiguityStats(dir), { asked: 1, resolved: 1, positive: 0, negative: 0 });
   handlers.agent_end({}, ambiguousCtx);
 } finally {
   rmSync(dir, { recursive: true, force: true });

@@ -5,6 +5,7 @@ const TAU_DIR = ".tau";
 const RUNS = "runs.jsonl";
 const MEMORIES = "memory.jsonl";
 const SESSIONS = "session.jsonl";
+const FEEDBACK = "feedback.jsonl";
 
 function schema(properties = {}) {
   return { type: "object", properties, additionalProperties: false };
@@ -222,12 +223,16 @@ function isSimplePrompt(prompt) {
 
 function ambiguityReason(prompt) {
   const text = String(prompt || "").trim().toLowerCase();
+  if (/\b(target|scope|acceptance|criteria)\s*:/.test(text)) return "";
   const hasConcreteRef = /\b[\w.-]+\.(?:js|mjs|ts|tsx|py|go|rs|java|json|ya?ml|md)\b|\/[\w.-]+|#\d+|\b(test|error|exception|endpoint|function|class|file)\b/.test(text);
   if (hasConcreteRef) return "";
   const vagueTarget = /\b(it|this|that|thing|everything|whatever)\b/.test(text);
   const vagueOutcome = /\b(production[- ]ready|strategic fix|robust and fast|best|better)\b/.test(text);
   const shortImperative = text.split(/\s+/).length <= 4 && /^(fix|make|improve|refactor|optimize|implement|handle|do)\b/.test(text);
-  return vagueTarget || vagueOutcome || shortImperative ? "target and acceptance criteria missing" : "";
+  const highLevelAction = /\b(sort out|take care of|deal with|look into|address|handle|prepare|ship|finish)\b/.test(text);
+  const hasAcceptance = /\b(acceptance|must|should|under|less than|pass(?:ing)?|reject|add|remove)\b|\d+\s*(?:ms|s|min|%)/.test(text);
+  const vagueConstraint = /\b(without breaking|anything important|as appropriate|where needed)\b/.test(text);
+  return vagueTarget || vagueOutcome || shortImperative || (highLevelAction && !hasAcceptance) || (vagueConstraint && !hasAcceptance) ? "target and acceptance criteria missing" : "";
 }
 
 function ambiguityGuidance(reason) {
@@ -245,13 +250,36 @@ function status(cwd) {
     runs: runs.length,
     memories: memories.length,
     sessionTurns: sessions.length,
+    ambiguity: ambiguityStats(cwd),
     lastBucket: last?.bucket || null,
     lastMode: last?.mode || null,
   };
 }
 
+function lastSessionEntry(cwd, id) {
+  return readJsonl(cwd, SESSIONS).filter((row) => row.sessionId === id).at(-1);
+}
+
+function feedbackOutcome(prompt) {
+  const text = String(prompt || "").toLowerCase();
+  if (/^(?:no|nee)\b|\b(wrong|onjuist|niet goed|werkt niet|still|nog steeds|failed|fail)\b/.test(text)) return "negative";
+  if (/\b(thanks|perfect|great|goed|prima|werkt|klaar|done)\b/.test(text)) return "positive";
+  return "unknown";
+}
+
+function ambiguityStats(cwd) {
+  const asked = readJsonl(cwd, SESSIONS).filter((row) => row.ambiguous).length;
+  const feedback = readJsonl(cwd, FEEDBACK).filter((row) => row.pattern === "ambiguous");
+  return {
+    asked,
+    resolved: feedback.filter((row) => row.resolved).length,
+    positive: feedback.filter((row) => row.sentiment === "positive").length,
+    negative: feedback.filter((row) => row.sentiment === "negative").length,
+  };
+}
+
 function sessionLesson(cwd, id) {
-  const last = readJsonl(cwd, SESSIONS).filter((row) => row.sessionId === id).at(-1);
+  const last = lastSessionEntry(cwd, id);
   if (!last || (!last.tools && !last.errors?.length && !last.ambiguous)) return "";
   if (last.errors?.length) return `Same session last turn: tools=${last.tools}; failed_tools=${last.errors.join(",")}. Reuse known results; do not repeat failed calls unchanged.`;
   if (last.ambiguous) return "Same session prior task lacked target and acceptance criteria. Use the user's clarification before acting.";
@@ -305,7 +333,18 @@ export default function tau(pi) {
     const key = runKey(ctx);
     activeRuns.delete(key);
     const id = sessionId(ctx);
-    const next = instruction(cwd, event.prompt || "", sessionLesson(cwd, id));
+    const prompt = event.prompt || "";
+    const previous = lastSessionEntry(cwd, id);
+    const next = instruction(cwd, prompt, sessionLesson(cwd, id));
+    if (previous?.ambiguous) {
+      appendJsonl(cwd, FEEDBACK, {
+        ts: new Date().toISOString(),
+        sessionId: id,
+        pattern: "ambiguous",
+        resolved: !next.ambiguity,
+        sentiment: feedbackOutcome(prompt),
+      });
+    }
     activeRuns.set(key, {
       cwd,
       sessionId: id,
@@ -440,4 +479,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, bestMemoryLimit, bucketFromPrompt, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, trend, validRuns };
