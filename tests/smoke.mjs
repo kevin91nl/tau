@@ -64,6 +64,7 @@ try {
   assert.equal(parallelOneInstance(lmModels, "other"), "");
   assert.deepEqual(sourcePathsFromCommand("sed -n '1,80p' src/runtime/dedupe.py tests/test_dedupe.py"), ["src/runtime/dedupe.py", "tests/test_dedupe.py"]);
   assert.deepEqual(sourcePathsFromContent([{ type: "text", text: "src/runtime/dedupe.py:17" }]), ["src/runtime/dedupe.py"]);
+  assert.deepEqual(sourcePathsFromContent([{ type: "text", text: "riskstudio_worker.runtime.models sqlalchemy.exc" }]), []);
   assert.equal(isFocusedTargetCall({ toolName: "read", input: { path: "src/runtime/dedupe.py" } }, { files: new Set(["src/runtime/dedupe.py"]) }), true);
   assert.match(focusLesson(new Set(["src/a.py"])), /enough exploration/);
   assert.match(predicateInvariantLesson([{ type: "text", text: "def job_execution_is_open(x):\n return x not in open_statuses" }]), /do not remove statuses/);

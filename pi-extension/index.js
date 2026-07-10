@@ -603,7 +603,10 @@ function recentMemories(cwd, limit = 3, bucket = "") {
 function sourcePath(input) {
   const path = String(input?.path || "");
   if (!path || /(^|\/)(node_modules|\.git|\.tau)(\/|$)/.test(path)) return "";
-  return /\.[a-z0-9]+$/i.test(path) ? path.slice(0, 180) : "";
+  const extension = path.match(/\.([a-z0-9]{1,6})$/i)?.[1].toLowerCase();
+  return extension && new Set(["py", "js", "mjs", "ts", "tsx", "go", "rs", "java", "json", "yaml", "yml", "md"]).has(extension)
+    ? path.slice(0, 180)
+    : "";
 }
 
 function sourcePathsFromCommand(command) {
