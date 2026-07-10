@@ -543,6 +543,21 @@ function failureFooter() {
   return "Verification guard: one or more tools failed. Do not claim validation succeeded until the failed command is rerun successfully.";
 }
 
+function observedSymbols(content) {
+  const text = Array.isArray(content)
+    ? content.filter((block) => block?.type === "text").map((block) => block.text).join("\n")
+    : "";
+  return [...text.matchAll(/\b[A-Za-z_$][\w$]*\b/g)].map((match) => match[0]);
+}
+
+function unverifiedSymbolFooter(message, symbols) {
+  if (!Array.isArray(message?.content) || !symbols?.size) return "";
+  const text = message.content.filter((block) => block?.type === "text").map((block) => block.text).join("\n");
+  const missing = [...new Set([...text.matchAll(/`([A-Za-z_$][\w$]*)`/g)].map((match) => match[1]))]
+    .filter((symbol) => !symbols.has(symbol));
+  return missing.length ? `Evidence guard: ${missing.join(", ")} was not observed in tool output. Do not present it as a project fact.` : "";
+}
+
 function withFooter(message, footer, prefix = false) {
   if (!Array.isArray(message.content)) return undefined;
   const guard = { type: "text", text: `\n\n${footer}` };
@@ -782,6 +797,7 @@ export default function tau(pi) {
       failedCalls: new Set(),
       seenExplorationCalls: new Set(),
       files: new Set(),
+      observedSymbols: new Set(),
       prompt,
       requiresRuntimeProof: needsRuntimeProof(prompt),
       attemptId: `${Date.now().toString(36)}-${++attemptSequence}`,
@@ -812,6 +828,10 @@ export default function tau(pi) {
     if (active.errors.length) {
       return { message: withFooter(msg, failureFooter(), true) };
     }
+    const unverifiedSymbols = unverifiedSymbolFooter(msg, active.observedSymbols);
+    if (unverifiedSymbols) {
+      return { message: withFooter(msg, unverifiedSymbols, true) };
+    }
     if (active.requiresRuntimeProof) {
       return { message: withFooter(msg, evidenceFooter()) };
     }
@@ -829,6 +849,9 @@ export default function tau(pi) {
     const active = activeRuns.get(runKey(ctx));
     if (!active) return;
     active.tools += 1;
+    if (!event.isError) {
+      for (const symbol of observedSymbols(event.content)) active.observedSymbols.add(symbol);
+    }
     const content = event.toolName === "bash" ? capToolContent(event.content) : undefined;
     if (content) active.outputCaps += 1;
     const invariant = predicateInvariantLesson(event.content);
@@ -981,4 +1004,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, parallelOneInstance, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };
