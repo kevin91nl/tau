@@ -12,10 +12,12 @@ from tau_core.config import PREFERRED_MODELS, TauConfig
 from tau_core.context import build_pack, find_root
 from tau_core.lmstudio import doctor as lm_doctor
 from tau_core.locate_read import locate_read
-from tau_core.memory import add_card, cards
+from tau_core.evals import add_case, cases
+from tau_core.memory import add_card, cards, compact_cards, promote_card
 from tau_core.memory_pack import pack_memory
 from tau_core.metrics import Timer, record_measurement, summarize_trends
 from tau_core.learning import advise, learn_policy
+from tau_core.observed_diff import git_diff
 from tau_core.proposals import apply_proposal, create_proposal, discard_proposal, latest_proposal
 from tau_core.proposal_check import check_proposal
 from tau_core.resources import preflight
@@ -23,6 +25,7 @@ from tau_core.secret_scan import scan_tree as secret_scan_tree
 from tau_core.state import append_jsonl, ensure_state, latest_run, run_id, write_json
 from tau_core.trace import event, read_events
 from tau_core.reviewer import scan_diff_file, scan_git_diff, record_roi
+from tau_core.replay_cache import cache_key, get as cache_get, put as cache_put
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -102,6 +105,22 @@ def cmd_memory_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_memory_promote(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    obj = promote_card(root, args.id, status=args.status)
+    if obj is None:
+        print("Memory card not found.", file=sys.stderr)
+        return 1
+    print(json.dumps(obj, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_memory_compact(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    print(json.dumps(compact_cards(root), indent=2, sort_keys=True))
+    return 0
+
+
 def cmd_proposal_create(args: argparse.Namespace) -> int:
     root = _ensure_root(args)
     ensure_state(root)
@@ -154,6 +173,24 @@ def cmd_proposal_discard(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_accept(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    diff = git_diff(root, staged=args.staged)
+    append_jsonl(root / ".tau" / "ledger.jsonl", {"event": "user_accept", "bucket": args.bucket, "diff_sha256": diff["patch_sha256"]})
+    print(json.dumps({"accepted": True, "bucket": args.bucket, "diff": {k: v for k, v in diff.items() if k != "patch"}}, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_reject(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    diff = git_diff(root, staged=args.staged)
+    append_jsonl(root / ".tau" / "ledger.jsonl", {"event": "user_reject", "bucket": args.bucket, "reason": args.reason, "diff_sha256": diff["patch_sha256"]})
+    print(json.dumps({"accepted": False, "bucket": args.bucket, "reason": args.reason, "diff": {k: v for k, v in diff.items() if k != "patch"}}, indent=2, sort_keys=True))
+    return 0
+
+
 def cmd_ab_record(args: argparse.Namespace) -> int:
     root = _ensure_root(args)
     ensure_state(root)
@@ -161,6 +198,40 @@ def cmd_ab_record(args: argparse.Namespace) -> int:
     candidate = [float(x) for x in args.candidate.split(",")]
     obj = write_artifact(root, name=args.name, baseline=baseline, candidate=candidate, metric=args.metric)
     print(json.dumps(obj, indent=2))
+    return 0
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    obj = git_diff(root, staged=args.staged)
+    print(json.dumps(obj, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_cache(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    key = args.key or cache_key(args.prompt or "", args.policy_hash or "", args.scope)
+    if args.cache_cmd == "get":
+        hit = cache_get(root, key)
+        print(json.dumps(hit or {"miss": True, "key": key}, indent=2, sort_keys=True))
+        return 0
+    value = {"prompt": args.prompt, "scope": args.scope, "value": args.value}
+    print(json.dumps(cache_put(root, key, value), indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_eval_case(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    if args.eval_case_cmd == "add":
+        obj = add_case(root, args.id, args.prompt, args.bucket, split=args.split)
+        print(json.dumps(obj, indent=2, sort_keys=True))
+        return 0
+    rows = cases(root, split=args.split)
+    print("id | split | bucket | prompt")
+    for row in rows:
+        print(f"{row['id']} | {row.get('split','dev')} | {row.get('bucket','')} | {row.get('prompt','')[:80]}")
     return 0
 
 
@@ -489,6 +560,12 @@ def parser() -> argparse.ArgumentParser:
     ml = mem_sub.add_parser("list")
     add_common(ml)
     ml.add_argument("--include", action="store_true")
+    mpr = mem_sub.add_parser("promote")
+    add_common(mpr)
+    mpr.add_argument("id")
+    mpr.add_argument("--status", choices=["active", "tombstoned", "quarantined"], default="active")
+    mc = mem_sub.add_parser("compact")
+    add_common(mc)
 
     # proposal subcommands
     prop = sub.add_parser("proposal")
@@ -507,6 +584,16 @@ def parser() -> argparse.ArgumentParser:
 
     pd_ = prop_sub.add_parser("discard")
     add_common(pd_)
+
+    acc = sub.add_parser("accept")
+    add_common(acc)
+    acc.add_argument("--bucket", default="manual")
+    acc.add_argument("--staged", action="store_true")
+    rej = sub.add_parser("reject")
+    add_common(rej)
+    rej.add_argument("--bucket", default="manual")
+    rej.add_argument("--reason", default="")
+    rej.add_argument("--staged", action="store_true")
 
     # ab subcommand
     ab = sub.add_parser("ab")
@@ -540,6 +627,38 @@ def parser() -> argparse.ArgumentParser:
     add_common(trend)
     trend.add_argument("--bucket")
     trend.add_argument("--json", action="store_true")
+
+    diff = sub.add_parser("diff")
+    add_common(diff)
+    diff.add_argument("--staged", action="store_true")
+
+    cache = sub.add_parser("cache")
+    cache_sub = cache.add_subparsers(dest="cache_cmd", required=True)
+    cg = cache_sub.add_parser("get")
+    add_common(cg)
+    cg.add_argument("--key")
+    cg.add_argument("--prompt")
+    cg.add_argument("--policy-hash", default="")
+    cg.add_argument("--scope", default=".")
+    cp = cache_sub.add_parser("put")
+    add_common(cp)
+    cp.add_argument("--key")
+    cp.add_argument("--prompt", required=True)
+    cp.add_argument("--policy-hash", default="")
+    cp.add_argument("--scope", default=".")
+    cp.add_argument("--value", required=True)
+
+    ec = sub.add_parser("eval-case")
+    ec_sub = ec.add_subparsers(dest="eval_case_cmd", required=True)
+    eca = ec_sub.add_parser("add")
+    add_common(eca)
+    eca.add_argument("--id", required=True)
+    eca.add_argument("--prompt", required=True)
+    eca.add_argument("--bucket", required=True)
+    eca.add_argument("--split", choices=["dev", "holdout", "rolling_real"], default="dev")
+    ecl = ec_sub.add_parser("list")
+    add_common(ecl)
+    ecl.add_argument("--split")
 
     learn = sub.add_parser("learn")
     add_common(learn)
@@ -635,6 +754,10 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_memory_add(args)
         if args.mem_cmd == "list":
             return cmd_memory_list(args)
+        if args.mem_cmd == "promote":
+            return cmd_memory_promote(args)
+        if args.mem_cmd == "compact":
+            return cmd_memory_compact(args)
     # proposal subcommands
     if args.cmd == "proposal":
         if args.prop_cmd == "create":
@@ -645,10 +768,20 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_proposal_apply(args)
         if args.prop_cmd == "discard":
             return cmd_proposal_discard(args)
+    if args.cmd == "accept":
+        return cmd_accept(args)
+    if args.cmd == "reject":
+        return cmd_reject(args)
     # ab subcommands
     if args.cmd == "ab":
         if args.ab_cmd == "record":
             return cmd_ab_record(args)
+    if args.cmd == "diff":
+        return cmd_diff(args)
+    if args.cmd == "cache":
+        return cmd_cache(args)
+    if args.cmd == "eval-case":
+        return cmd_eval_case(args)
     if args.cmd == "measure":
         if args.measure_cmd == "record":
             return cmd_measure_record(args)

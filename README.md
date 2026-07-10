@@ -34,10 +34,14 @@ TauImprove
 TauAuto
 TauMemoryAdd
 TauMemoryList
+TauMemoryPromote
+TauMemoryCompact
 TauProposalCreate
 TauProposalLatest
 TauProposalApply
 TauProposalDiscard
+TauAccept
+TauReject
 TauABRecord
 TauMeasureRecord
 TauTrend
@@ -47,6 +51,9 @@ TauLocateRead
 TauMemoryPack
 TauSecretScan
 TauReviewer
+TauDiff
+TauCacheGet
+TauEvalCaseList
 ```
 
 Or run the sidecar CLI:
@@ -120,4 +127,8 @@ python -m tau_cli.main memory-pack --scope .
 python -m tau_cli.main secret-scan
 python -m tau_cli.main proposal-check
 python -m tau_cli.main reviewer git-diff
+python -m tau_cli.main diff
+python -m tau_cli.main accept --bucket fix-test
+python -m tau_cli.main cache put --prompt "fix" --value "known-good"
+python -m tau_cli.main eval-case add --id fix-001 --prompt "fix failing test" --bucket failing-test
 ```

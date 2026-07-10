@@ -217,6 +217,34 @@ export default function(pi: ExtensionAPI) {
     }
   });
 
+  pi.registerTool({
+    name: "TauMemoryPromote",
+    label: "Tau Memory Promote",
+    description: "Promote, tombstone, or quarantine a Tau memory card.",
+    parameters: Type.Object({
+      id: Type.String(),
+      status: Type.Optional(Type.String()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      return textResult(runTau(["memory", "promote", String(params.id), "--status", String(params.status || "active"), "--cwd", cwd], cwd).text);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauMemoryCompact",
+    label: "Tau Memory Compact",
+    description: "Compact Tau memory cards, keeping latest non-tombstoned records.",
+    parameters: Type.Object({
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      return textResult(runTau(["memory", "compact", "--cwd", cwd], cwd).text);
+    }
+  });
+
   /* Proposal tools */
 
   pi.registerTool({
@@ -274,6 +302,41 @@ export default function(pi: ExtensionAPI) {
       const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
       const r = runTau(["proposal", "discard", "--cwd", cwd], cwd);
       return textResult(r.text, r.details);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauAccept",
+    label: "Tau Accept",
+    description: "Record user acceptance with observed git diff metadata.",
+    parameters: Type.Object({
+      bucket: Type.Optional(Type.String()),
+      staged: Type.Optional(Type.Boolean()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args = ["accept", "--bucket", String(params.bucket || "manual"), "--cwd", cwd];
+      if (params.staged) args.push("--staged");
+      return textResult(runTau(args, cwd).text);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauReject",
+    label: "Tau Reject",
+    description: "Record user rejection with reason and observed git diff metadata.",
+    parameters: Type.Object({
+      bucket: Type.Optional(Type.String()),
+      reason: Type.Optional(Type.String()),
+      staged: Type.Optional(Type.Boolean()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args = ["reject", "--bucket", String(params.bucket || "manual"), "--reason", String(params.reason || ""), "--cwd", cwd];
+      if (params.staged) args.push("--staged");
+      return textResult(runTau(args, cwd).text);
     }
   });
 
@@ -432,6 +495,60 @@ export default function(pi: ExtensionAPI) {
     }
   });
 
+  pi.registerTool({
+    name: "TauDiff",
+    label: "Tau Diff",
+    description: "Record and return observed git diff metadata.",
+    parameters: Type.Object({
+      staged: Type.Optional(Type.Boolean()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args = ["diff", "--cwd", cwd];
+      if (params.staged) args.push("--staged");
+      return textResult(runTau(args, cwd).text);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauCacheGet",
+    label: "Tau Cache Get",
+    description: "Look up replay cache by key or prompt/scope/policy hash.",
+    parameters: Type.Object({
+      key: Type.Optional(Type.String()),
+      prompt: Type.Optional(Type.String()),
+      policyHash: Type.Optional(Type.String()),
+      scope: Type.Optional(Type.String()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args = ["cache", "get", "--cwd", cwd];
+      if (params.key) args.push("--key", String(params.key));
+      if (params.prompt) args.push("--prompt", String(params.prompt));
+      if (params.policyHash) args.push("--policy-hash", String(params.policyHash));
+      if (params.scope) args.push("--scope", String(params.scope));
+      return textResult(runTau(args, cwd).text);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauEvalCaseList",
+    label: "Tau Eval Case List",
+    description: "List local Tau eval cases by split.",
+    parameters: Type.Object({
+      split: Type.Optional(Type.String()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args = ["eval-case", "list", "--cwd", cwd];
+      if (params.split) args.push("--split", String(params.split));
+      return textResult(runTau(args, cwd).text);
+    }
+  });
+
   pi.registerCommand("tau", {
     description: "Tau help",
     async handler(_args, ctx) {
@@ -446,10 +563,14 @@ export default function(pi: ExtensionAPI) {
         "- TauImprove: use bare Pi/Qwen to improve Tau itself",
         "- TauMemoryAdd: add a memory card",
         "- TauMemoryList: list memory cards",
+        "- TauMemoryPromote: promote/tombstone/quarantine memory",
+        "- TauMemoryCompact: compact memory log",
         "- TauProposalCreate: create a file-change proposal",
         "- TauProposalLatest: show latest proposal",
         "- TauProposalApply: apply the latest proposal",
         "- TauProposalDiscard: discard the latest proposal",
+        "- TauAccept: record accepted observed diff",
+        "- TauReject: record rejected observed diff",
         "- TauABRecord: record an A/B comparison result",
         "- TauMeasureRecord: record outcome metrics",
         "- TauTrend: show measured improvement trends",
@@ -459,6 +580,9 @@ export default function(pi: ExtensionAPI) {
         "- TauMemoryPack: compact scoped memory",
         "- TauSecretScan: scan for secrets",
         "- TauReviewer: scan diff and record ROI",
+        "- TauDiff: record observed git diff",
+        "- TauCacheGet: lookup replay cache",
+        "- TauEvalCaseList: list local eval cases",
         "",
         `Package root: ${root}`
       ].join("\n");

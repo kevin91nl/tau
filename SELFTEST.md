@@ -16,6 +16,9 @@ Verified smoke commands for bare Pi and the Tau context pack.
 | 8 | `python -m tau_cli.main memory list` | List active memory cards. |
 | 9 | `python -m tau_cli.main proposal latest` | Show the latest proposal. |
 | 10 | `python -m tau_cli.main ab record --name test --baseline "1,2" --candidate "0.5,1"` | Record an A/B result. |
+| 11 | `python -m tau_cli.main diff` | Record observed git diff metadata. |
+| 12 | `python -m tau_cli.main cache put --prompt "p" --value "v"` | Store replay-cache record. |
+| 13 | `python -m tau_cli.main eval-case add --id c1 --prompt "p" --bucket b` | Store eval case. |
 
 ## Unit Tests
 

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tau_core.memory import add_card, cards, scoped_cards
+from tau_core.memory import add_card, cards, compact_cards, promote_card, scoped_cards
 
 
 class MemoryTests(unittest.TestCase):
@@ -45,6 +45,18 @@ class MemoryTests(unittest.TestCase):
             c1 = add_card(root, "same summary", scope="s")
             c2 = add_card(root, "same summary", scope="s")
             self.assertEqual(c1["id"], c2["id"])
+
+    def test_promote_and_compact(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            card = add_card(root, "Promote me", scope="x")
+            self.assertEqual(len(cards(root)), 0)
+            promote_card(root, card["id"])
+            self.assertEqual(len(cards(root)), 1)
+            promote_card(root, card["id"], status="tombstoned")
+            result = compact_cards(root)
+            self.assertGreater(result["before"], result["after"])
+            self.assertEqual(len(cards(root, include_candidates=True)), 0)
 
 
 if __name__ == "__main__":
