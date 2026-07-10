@@ -135,13 +135,21 @@ try {
   const featureRun = rows("runs.jsonl").at(-1);
   assert.equal(featureRun.trainable, true);
 
+  const renderBeforePlan = readFileSync(join(dir, "src", "render.js"), "utf8");
+  await rpc.prompt("Maak een plan voor src/render.js. Acceptance: benoem doel, betrokken files, stappen, verificatie en risico. Inspecteer waar nodig; implementeer niets.");
+  assert.equal(readFileSync(join(dir, "src", "render.js"), "utf8"), renderBeforePlan);
+  const planRun = rows("runs.jsonl").at(-1);
+  assert.equal(planRun.taskKind, "planning");
+  assert.equal(planRun.accepted, false);
+
   console.log(JSON.stringify({
     status: "ok",
-    cases: ["vague-clarification", "same-session-clarification-to-sealed-edit", "multi-file-regression", "feature-with-compatibility"],
+    cases: ["vague-clarification", "same-session-clarification-to-sealed-edit", "multi-file-regression", "feature-with-compatibility", "read-only-plan"],
     runs: rows("runs.jsonl").length,
     sealedRun: completed,
     complexRun,
     featureRun,
+    planRun,
   }));
 } finally {
   await rpc?.stop();
