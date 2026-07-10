@@ -24,6 +24,7 @@ function startRpc(tools) {
   let stderr = "";
   let pending;
   let rejectPending;
+  let exitError;
   function failPending(error) {
     if (!pending || !rejectPending) return;
     const reject = rejectPending;
@@ -33,7 +34,8 @@ function startRpc(tools) {
   }
   child.once("error", (error) => failPending(error));
   child.once("exit", (code, signal) => {
-    failPending(new Error(`RPC eval exited before settle: code=${code} signal=${signal}. ${stderr}`));
+    exitError = new Error(`RPC eval exited before settle: code=${code} signal=${signal}. ${stderr}`);
+    failPending(exitError);
   });
   child.stderr.on("data", (chunk) => { stderr += chunk; });
   child.stdout.on("data", (chunk) => {
@@ -55,6 +57,10 @@ function startRpc(tools) {
   });
   function prompt(message) {
     return new Promise((resolvePrompt, rejectPrompt) => {
+      if (exitError) {
+        rejectPrompt(exitError);
+        return;
+      }
       const settle = () => {
         clearTimeout(timer);
         resolvePrompt();
@@ -71,7 +77,17 @@ function startRpc(tools) {
       child.stdin.write(`${JSON.stringify({ id: "eval", type: "prompt", message })}\n`);
     });
   }
-  return { prompt, stop: () => child.kill("SIGTERM") };
+  function stop() {
+    return new Promise((resolveStop) => {
+      if (child.exitCode !== null) {
+        resolveStop();
+        return;
+      }
+      child.once("exit", resolveStop);
+      child.kill("SIGTERM");
+    });
+  }
+  return { prompt, stop };
 }
 
 function rows(file) {
@@ -91,7 +107,7 @@ try {
   assert.equal(rows("session.jsonl").at(-1).ambiguous, true);
 
   await rpc.prompt("Target: task.js. First read only task.js. Replace exactly `const status = \"draft\";` with `const status = \"ready\";`. Then run `npm test`. Do not edit any other file. Acceptance: npm test passes.");
-  rpc.stop();
+  await rpc.stop();
   assert.equal(readFileSync(join(dir, "task.js"), "utf8"), 'const status = "ready";\n');
   assert.equal(readFileSync(join(dir, "untouched.txt"), "utf8"), "keep\n");
   const completed = rows("runs.jsonl").at(-1);
@@ -106,7 +122,7 @@ try {
 
   const complexRpc = startRpc("read,bash,edit");
   await complexRpc.prompt("Customer import labels are wrong after a refactor. Find and fix the regression. Acceptance: preserve normalized non-empty names, render `<unknown>` for whitespace-only or missing names, public API unchanged, and `npm test` passes. Do not edit tests.");
-  complexRpc.stop();
+  await complexRpc.stop();
   assert.match(readFileSync(join(dir, "src", "normalize.js"), "utf8"), /\.trim\(\)/);
   const complexRun = rows("runs.jsonl").at(-1);
   assert.equal(complexRun.trainable, true);
@@ -114,7 +130,7 @@ try {
   writeFileSync(join(dir, "src", "key.test.js"), 'import assert from "node:assert/strict";\nimport test from "node:test";\nimport { renderImport } from "./render.js";\n\ntest("adds a stable normalized import key without changing the label", () => {\n  assert.deepEqual(renderImport({ profile: { name: " Ada ", email: " ADA@Example.COM " } }), { label: "Ada", key: "ada@example.com" });\n  assert.deepEqual(renderImport({ profile: { name: " Ada " } }), { label: "Ada", key: "ada" });\n});\n');
   const featureRpc = startRpc("read,bash,edit");
   await featureRpc.prompt("Import consumers need a stable `key` now. Implement it without changing label behavior. The key must be normalized profile email if present; otherwise normalized label. Acceptance: public API stays compatible and `npm test` passes. Do not edit tests.");
-  featureRpc.stop();
+  await featureRpc.stop();
   assert.match(readFileSync(join(dir, "src", "render.js"), "utf8"), /key/);
   const featureRun = rows("runs.jsonl").at(-1);
   assert.equal(featureRun.trainable, true);
