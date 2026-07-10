@@ -45,7 +45,7 @@ Set `TAU_HOME=/some/local/path` to isolate or reset global learning for an exper
 - Node 18+
 - any Pi model setup, local or remote
 
-Tau does not configure models. For LM Studio, configure Pi as usual, then install Tau.
+For LM Studio, Tau automatically routes a Qwen request to an already-loaded matching `parallel=1` instance. This avoids a known multi-tool-turn reliability failure observed with a `parallel=8` Qwen instance. Tau never loads, unloads, or changes an LM Studio model. Load one matching `parallel=1` instance once in LM Studio; then keep using the normal Pi model id. Set `TAU_LMSTUDIO_ROUTE=off` to disable this routing.
 
 ## Verify Install
 

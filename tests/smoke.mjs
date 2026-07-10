@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, parallelOneInstance, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -49,6 +49,11 @@ try {
   assert.equal(narrowBashCommand("pytest tests/unit/test_app.py", "Fix app"), "");
   assert.equal(normalizeMacSed("sed -i 's/a/b/' file.js", "darwin"), "sed -i '' 's/a/b/' file.js");
   assert.equal(normalizeMacSed("sed -i 's/a/b/' file.js", "linux"), "sed -i 's/a/b/' file.js");
+  const lmModels = { models: [{ key: "qwen", loaded_instances: [{ id: "qwen", config: { parallel: 8 } }, { id: "qwen:2", config: { parallel: 1 } }] }] };
+  assert.equal(parallelOneInstance(lmModels, "qwen"), "qwen:2");
+  assert.equal(parallelOneInstance(lmModels, "qwen/qwen"), "qwen:2");
+  assert.equal(parallelOneInstance(lmModels, "qwen:2"), "");
+  assert.equal(parallelOneInstance(lmModels, "other"), "");
   assert.deepEqual(sourcePathsFromCommand("sed -n '1,80p' src/runtime/dedupe.py tests/test_dedupe.py"), ["src/runtime/dedupe.py", "tests/test_dedupe.py"]);
   assert.match(focusLesson(new Set(["src/a.py"])), /enough exploration/);
   assert.match(predicateInvariantLesson([{ type: "text", text: "def job_execution_is_open(x):\n return x not in open_statuses" }]), /do not remove statuses/);
@@ -174,6 +179,13 @@ try {
     sendMessage(message, options) { sent.push({ message, options }); },
   };
   tau(pi);
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => lmModels });
+  const routed = await handlers.before_provider_request({ payload: { model: "qwen", messages: [] } }, { model: { provider: "lmstudio", id: "qwen" } });
+  assert.equal(routed.model, "qwen:2");
+  const untouchedProvider = await handlers.before_provider_request({ payload: { model: "qwen" } }, { model: { provider: "openai", id: "qwen" } });
+  assert.equal(untouchedProvider, undefined);
+  globalThis.fetch = previousFetch;
   const ctx = { cwd: dir };
   appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "reply-exactly", mode: "current", totalTokens: 100, elapsedMs: 1000, tools: 2 }) + "\n");
   assert.equal(globalStatus("unknown/unknown").runs, 0);

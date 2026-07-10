@@ -15,6 +15,8 @@ const MAX_SYSTEM_PROMPT_CHARS = 14_000;
 const MAX_TRAINABLE_TOKENS = 250_000;
 const MAX_TRAINABLE_TOOLS = 16;
 const GLOBAL_MIN_SAMPLES = 3;
+const LM_STUDIO_URL = process.env.TAU_LMSTUDIO_URL || "http://127.0.0.1:1234";
+const LM_STUDIO_TIMEOUT_MS = 750;
 
 function schema(properties = {}) {
   return { type: "object", properties, additionalProperties: false };
@@ -495,6 +497,34 @@ function policyScope(ctx) {
   return process.env.TAU_POLICY_SCOPE || `${ctx?.model?.provider || "unknown"}/${ctx?.model?.id || "unknown"}`;
 }
 
+function parallelOneInstance(models, requestedModel) {
+  const requested = String(requestedModel || "");
+  if (!requested || requested.includes(":")) return "";
+  const modelKey = requested.includes("/") ? requested.slice(requested.lastIndexOf("/") + 1) : requested;
+  const entries = Array.isArray(models?.models) ? models.models : [];
+  const model = entries.find((entry) => entry?.key === modelKey ||
+    entry?.loaded_instances?.some((instance) => instance?.id === modelKey));
+  const instance = model?.loaded_instances?.find((item) =>
+    item?.config?.parallel === 1 && String(item?.id || "").startsWith(`${modelKey}:`)
+  );
+  return String(instance?.id || "");
+}
+
+async function lmStudioParallelOneModel(requestedModel) {
+  if (process.env.TAU_LMSTUDIO_ROUTE === "off") return "";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LM_STUDIO_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${LM_STUDIO_URL}/api/v1/models`, { signal: controller.signal });
+    if (!response.ok) return "";
+    return parallelOneInstance(await response.json(), requestedModel);
+  } catch {
+    return "";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function needsRuntimeProof(prompt) {
   const text = String(prompt || "").toLowerCase();
   return /\b(raise|raises|exception)\b|\b(?:at|during) runtime\b|\bruntime (?:behavior|behaviour|error)\b/.test(text);
@@ -685,6 +715,14 @@ function interruptActiveRun(key) {
 }
 
 export default function tau(pi) {
+  pi.on("before_provider_request", async (event, ctx) => {
+    if (ctx?.model?.provider !== "lmstudio" || !event.payload || typeof event.payload !== "object") return;
+    const requested = event.payload.model;
+    const selected = await lmStudioParallelOneModel(requested);
+    if (!selected || selected === requested) return;
+    return { ...event.payload, model: selected };
+  });
+
   pi.on("before_agent_start", (event, ctx) => {
     const cwd = ctx.cwd || process.cwd();
     const key = runKey(ctx);
@@ -927,4 +965,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, parallelOneInstance, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
