@@ -1,20 +1,19 @@
 {
   "name": "tau",
   "version": "0.1.0",
-  "description": "Tau: local self-improvement harness for Pi.",
+  "description": "Tau: tiny auto-learning layer for Pi.",
   "type": "module",
-  "main": "pi-extension/index.ts",
+  "main": "pi-extension/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node tests/smoke.mjs"
+  },
   "files": [
     "pi-extension",
-    "tau_core",
-    "tau_cli",
     "tests",
-    "bin",
-    "pi-bare-agent",
-    "README.md",
-    "PLAN.md",
-    "SELFTEST.md",
-    "pyproject.toml"
+    "README.md"
   ],
   "keywords": [
     "pi-package",
@@ -31,11 +30,7 @@
   },
   "pi": {
     "extensions": [
-      "./pi-extension/index.ts"
+      "./pi-extension/index.js"
     ]
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "typebox": "*"
   }
 }
