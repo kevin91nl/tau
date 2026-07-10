@@ -7,10 +7,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tau_core.ab import write_artifact
 from tau_core.config import PREFERRED_MODELS, TauConfig
 from tau_core.context import build_pack, find_root
 from tau_core.lmstudio import doctor as lm_doctor
+from tau_core.memory import add_card, cards
 from tau_core.metrics import Timer
+from tau_core.proposals import apply_proposal, create_proposal, discard_proposal, latest_proposal
 from tau_core.resources import preflight
 from tau_core.state import append_jsonl, ensure_state, latest_run, run_id, write_json
 from tau_core.trace import event, read_events
@@ -65,6 +68,93 @@ def cmd_trace(args: argparse.Namespace) -> int:
     print("event | status | elapsed_ms | refs")
     for e in read_events(run):
         print(f"{e.get('type')} | {e.get('status')} | {e.get('elapsed_ms', '')} | {','.join(e.get('refs', []))}")
+    return 0
+
+
+def _ensure_root(args: argparse.Namespace) -> Path:
+    cwd = Path(args.cwd or os.getcwd())
+    return find_root(cwd)
+
+
+def cmd_memory_add(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    card = add_card(root, summary=args.summary, scope=args.scope, typ=args.type, status="candidate")
+    print(json.dumps(card, indent=2))
+    return 0
+
+
+def cmd_memory_list(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    include_candidates = args.include or False
+    cs = cards(root, include_candidates=include_candidates)
+    if not cs:
+        print("No memory cards.")
+        return 0
+    for c in cs:
+        print(f"{c['id']} | {c.get('scope','.')}/{c.get('type','workflow')} | {c['summary'][:80]}")
+    return 0
+
+
+def cmd_proposal_create(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    rec = create_proposal(root, rel=args.rel, content=args.content)
+    print(json.dumps(rec, indent=2))
+    return 0
+
+
+def cmd_proposal_latest(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    result = latest_proposal(root)
+    if not result:
+        print("No proposals found.")
+        return 1
+    path, rec = result
+    print(f"path | {path}")
+    print(json.dumps(rec, indent=2))
+    return 0
+
+
+def cmd_proposal_apply(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    result = latest_proposal(root)
+    if not result:
+        print("No proposals found.")
+        return 1
+    path, rec = result
+    try:
+        updated = apply_proposal(root, rec, path)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(updated, indent=2))
+    return 0
+
+
+def cmd_proposal_discard(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    result = latest_proposal(root)
+    if not result:
+        print("No proposals found.")
+        return 1
+    path, rec = result
+    try:
+        updated = discard_proposal(rec, path)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(updated, indent=2))
+    return 0
+
+
+def cmd_ab_record(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    baseline = [float(x) for x in args.baseline.split(",")]
+    candidate = [float(x) for x in args.candidate.split(",")]
+    obj = write_artifact(root, name=args.name, baseline=baseline, candidate=candidate, metric=args.metric)
+    print(json.dumps(obj, indent=2))
     return 0
 
 
@@ -195,6 +285,50 @@ def parser() -> argparse.ArgumentParser:
     im.add_argument("prompt")
     im.add_argument("--pi-bare", default="/Users/kevin/projects/tau/bin/pi-bare")
     im.add_argument("--timeout", type=int, default=300)
+
+    # memory subcommands
+    mem = sub.add_parser("memory")
+    mem_sub = mem.add_subparsers(dest="mem_cmd", required=True)
+
+    ma = mem_sub.add_parser("add")
+    add_common(ma)
+    ma.add_argument("summary")
+    ma.add_argument("--scope", default=".")
+    ma.add_argument("--type", default="workflow")
+
+    ml = mem_sub.add_parser("list")
+    add_common(ml)
+    ml.add_argument("--include", action="store_true")
+
+    # proposal subcommands
+    prop = sub.add_parser("proposal")
+    prop_sub = prop.add_subparsers(dest="prop_cmd", required=True)
+
+    pc = prop_sub.add_parser("create")
+    add_common(pc)
+    pc.add_argument("--rel", required=True)
+    pc.add_argument("--content", required=True)
+
+    pl = prop_sub.add_parser("latest")
+    add_common(pl)
+
+    pa = prop_sub.add_parser("apply")
+    add_common(pa)
+
+    pd_ = prop_sub.add_parser("discard")
+    add_common(pd_)
+
+    # ab subcommand
+    ab = sub.add_parser("ab")
+    ab_sub = ab.add_subparsers(dest="ab_cmd", required=True)
+
+    ar = ab_sub.add_parser("record")
+    add_common(ar)
+    ar.add_argument("--name", required=True)
+    ar.add_argument("--baseline", required=True)
+    ar.add_argument("--candidate", required=True)
+    ar.add_argument("--metric", default="time_to_acceptance_s")
+
     return p
 
 
@@ -214,6 +348,26 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_eval(args)
     if args.cmd == "improve":
         return cmd_improve(args)
+    # memory subcommands
+    if args.cmd == "memory":
+        if args.mem_cmd == "add":
+            return cmd_memory_add(args)
+        if args.mem_cmd == "list":
+            return cmd_memory_list(args)
+    # proposal subcommands
+    if args.cmd == "proposal":
+        if args.prop_cmd == "create":
+            return cmd_proposal_create(args)
+        if args.prop_cmd == "latest":
+            return cmd_proposal_latest(args)
+        if args.prop_cmd == "apply":
+            return cmd_proposal_apply(args)
+        if args.prop_cmd == "discard":
+            return cmd_proposal_discard(args)
+    # ab subcommands
+    if args.cmd == "ab":
+        if args.ab_cmd == "record":
+            return cmd_ab_record(args)
     return 2
 
 

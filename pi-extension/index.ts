@@ -85,6 +85,122 @@ export default function(pi: ExtensionAPI) {
     }
   });
 
+  /* Memory tools */
+
+  pi.registerTool({
+    name: "TauMemoryAdd",
+    label: "Tau Memory Add",
+    description: "Add a memory card to Tau's local knowledge base.",
+    parameters: Type.Object({
+      summary: Type.String({ description: "Memory card summary text." }),
+      scope: Type.Optional(Type.String({ description: "Scope, e.g. 'workflow' or '.' for global." })),
+      cwd: Type.Optional(Type.String({ description: "Project directory. Defaults to current cwd." }))
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args: string[] = ["memory", "add", String(params.summary)];
+      if (params.scope) args.push("--scope", String(params.scope));
+      const r = runTau(args, cwd);
+      return textResult(r.text, r.details);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauMemoryList",
+    label: "Tau Memory List",
+    description: "List active memory cards (optionally include candidates).",
+    parameters: Type.Object({
+      include: Type.Optional(Type.Boolean({ description: "Include candidate-status cards." })),
+      cwd: Type.Optional(Type.String({ description: "Project directory. Defaults to current cwd." }))
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args: string[] = ["memory", "list"];
+      if (params.include) args.push("--include");
+      const r = runTau(args, cwd);
+      return textResult(r.text, r.details);
+    }
+  });
+
+  /* Proposal tools */
+
+  pi.registerTool({
+    name: "TauProposalCreate",
+    label: "Tau Proposal Create",
+    description: "Create a file-change proposal for review before applying.",
+    parameters: Type.Object({
+      rel: Type.String({ description: "Relative file path to change." }),
+      content: Type.String({ description: "New file content for the proposal." }),
+      cwd: Type.Optional(Type.String({ description: "Project directory. Defaults to current cwd." }))
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const r = runTau(["proposal", "create", "--rel", String(params.rel), "--content", String(params.content)], cwd);
+      return textResult(r.text, r.details);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauProposalLatest",
+    label: "Tau Proposal Latest",
+    description: "Show the latest proposal for review.",
+    parameters: Type.Object({
+      cwd: Type.Optional(Type.String({ description: "Project directory. Defaults to current cwd." }))
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const r = runTau(["proposal", "latest", "--cwd", cwd], cwd);
+      return textResult(r.text, r.details);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauProposalApply",
+    label: "Tau Proposal Apply",
+    description: "Apply the latest proposal, writing changes to disk.",
+    parameters: Type.Object({
+      cwd: Type.Optional(Type.String({ description: "Project directory. Defaults to current cwd." }))
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const r = runTau(["proposal", "apply", "--cwd", cwd], cwd);
+      return textResult(r.text, r.details);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauProposalDiscard",
+    label: "Tau Proposal Discard",
+    description: "Discard the latest proposal without applying.",
+    parameters: Type.Object({
+      cwd: Type.Optional(Type.String({ description: "Project directory. Defaults to current cwd." }))
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const r = runTau(["proposal", "discard", "--cwd", cwd], cwd);
+      return textResult(r.text, r.details);
+    }
+  });
+
+  /* A/B record tool */
+
+  pi.registerTool({
+    name: "TauABRecord",
+    label: "Tau A/B Record",
+    description: "Record an A/B comparison result for a metric.",
+    parameters: Type.Object({
+      name: Type.String({ description: "Name of the A/B test." }),
+      baseline: Type.String({ description: "Comma-separated baseline values, e.g. '10.0,12.0'" }),
+      candidate: Type.String({ description: "Comma-separated candidate values, e.g. '8.0,9.0'" }),
+      cwd: Type.Optional(Type.String({ description: "Project directory. Defaults to current cwd." }))
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const r = runTau(["ab", "record", "--name", String(params.name), "--baseline", String(params.baseline), "--candidate", String(params.candidate)], cwd);
+      return textResult(r.text, r.details);
+    }
+  });
+
   pi.registerCommand("tau", {
     description: "Tau help",
     async run() {
@@ -94,6 +210,13 @@ export default function(pi: ExtensionAPI) {
         "- TauPack: build compact secret-redacted context",
         "- TauStatus: show Tau state",
         "- TauEval: run Tau smoke checks",
+        "- TauMemoryAdd: add a memory card",
+        "- TauMemoryList: list memory cards",
+        "- TauProposalCreate: create a file-change proposal",
+        "- TauProposalLatest: show latest proposal",
+        "- TauProposalApply: apply the latest proposal",
+        "- TauProposalDiscard: discard the latest proposal",
+        "- TauABRecord: record an A/B comparison result",
         "",
         `Package root: ${root}`
       ].join("\n"));

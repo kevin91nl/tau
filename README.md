@@ -27,6 +27,13 @@ TauDoctor
 TauPack
 TauStatus
 TauEval
+TauMemoryAdd
+TauMemoryList
+TauProposalCreate
+TauProposalLatest
+TauProposalApply
+TauProposalDiscard
+TauABRecord
 ```
 
 Or run the sidecar CLI:
@@ -38,4 +45,27 @@ python -m tau_cli.main eval
 python -m tau_cli.main pack "Reply exactly: TAU_PACK_OK" --cwd /Users/kevin/projects/tau
 /Users/kevin/projects/tau/bin/pi-bare -p "$(python -m tau_cli.main pack 'Reply exactly: TAU_PACK_OK' --cwd /Users/kevin/projects/tau)"
 python -m tau_cli.main improve "Improve Tau tests or docs"
+```
+
+### Memory commands
+
+```bash
+python -m tau_cli.main memory add "Use context pack for self-improvement" --scope workflow
+python -m tau_cli.main memory list
+python -m tau_cli.main memory list --include
+```
+
+### Proposal commands
+
+```bash
+python -m tau_cli.main proposal create --rel README.md --content "Updated readme"
+python -m tau_cli.main proposal latest
+python -m tau_cli.main proposal apply
+python -m tau_cli.main proposal discard
+```
+
+### A/B record command
+
+```bash
+python -m tau_cli.main ab record --name pack_speed --baseline "10.0,12.0,11.0" --candidate "8.0,9.0,8.5"
 ```
