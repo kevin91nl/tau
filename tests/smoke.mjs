@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 try {
@@ -17,6 +17,9 @@ try {
   assert.equal(repeatGuidance(0), "");
   assert.match(repeatGuidance(2), /no extra checks/);
   assert.match(liveLesson("bash"), /bash failed/);
+  assert.equal(ambiguityReason("Fix it."), "target and acceptance criteria missing");
+  assert.equal(ambiguityReason("Improve performance."), "target and acceptance criteria missing");
+  assert.equal(ambiguityReason("Fix tests/unit/test_json_payload.py"), "");
   const first = instruction(dir, "Fix failing test now");
   assert.equal(first.mode, "current");
   assert.deepEqual(trend(dir), {});
@@ -130,6 +133,13 @@ try {
   const continued = handlers.before_agent_start({ prompt: "Continue", systemPrompt: "base" }, liveCtx);
   assert.match(continued.systemPrompt, /Same session last turn/);
   handlers.agent_end({}, liveCtx);
+  const ambiguousCtx = { cwd: dir, sessionManager: { getSessionId() { return "ambiguous"; } } };
+  const ambiguous = handlers.before_agent_start({ prompt: "Fix it.", systemPrompt: "base" }, ambiguousCtx);
+  assert.match(ambiguous.systemPrompt, /Task ambiguous/);
+  handlers.agent_end({}, ambiguousCtx);
+  const clarified = handlers.before_agent_start({ prompt: "Fix tests/unit/test_json_payload.py", systemPrompt: "base" }, ambiguousCtx);
+  assert.match(clarified.systemPrompt, /Same session prior task lacked target/);
+  handlers.agent_end({}, ambiguousCtx);
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }

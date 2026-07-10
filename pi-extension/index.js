@@ -176,6 +176,7 @@ function instruction(cwd, prompt, lesson = "") {
   const repeats = repeatCount(cwd, hash);
   const memoryLimit = memoryLimitFor(cwd, hash, mode, simple);
   const memories = memoryLimit ? recentMemories(cwd, memoryLimit) : [];
+  const ambiguity = ambiguityReason(prompt);
   return {
     bucket,
     promptHash: hash,
@@ -183,12 +184,14 @@ function instruction(cwd, prompt, lesson = "") {
     simple,
     repeats,
     memoryLimit,
+    ambiguity,
     text: [
       "Tau is active silently.",
       `bucket=${bucket}; mode=${mode}; repeats=${repeats}; max_files=${maxFiles}; memory_k=${memoryLimit}.`,
       simple && mode === "candidate" ? "Answer directly without tools." : "",
       repeatGuidance(repeats),
       memories.length ? memoryPrompt(memories) : "",
+      ambiguityGuidance(ambiguity),
       lesson,
       "Keep context small. Read only files needed. Prefer targeted grep/read over broad scans.",
       "Do not mention Tau unless the user asks.",
@@ -217,6 +220,21 @@ function isSimplePrompt(prompt) {
   return text.length < 120 && !coding;
 }
 
+function ambiguityReason(prompt) {
+  const text = String(prompt || "").trim().toLowerCase();
+  const hasConcreteRef = /\b[\w.-]+\.(?:js|mjs|ts|tsx|py|go|rs|java|json|ya?ml|md)\b|\/[\w.-]+|#\d+|\b(test|error|exception|endpoint|function|class|file)\b/.test(text);
+  if (hasConcreteRef) return "";
+  const vagueTarget = /\b(it|this|that|thing|everything|whatever)\b/.test(text);
+  const vagueOutcome = /\b(production[- ]ready|strategic fix|robust and fast|best|better)\b/.test(text);
+  const shortImperative = text.split(/\s+/).length <= 4 && /^(fix|make|improve|refactor|optimize|implement|handle|do)\b/.test(text);
+  return vagueTarget || vagueOutcome || shortImperative ? "target and acceptance criteria missing" : "";
+}
+
+function ambiguityGuidance(reason) {
+  if (!reason) return "";
+  return `Task ambiguous: ${reason}. Do not inspect files or propose commands. Ask one concise clarification for target and acceptance criteria, then wait.`;
+}
+
 function status(cwd) {
   const runs = readJsonl(cwd, RUNS);
   const memories = readMemoryJsonl(cwd);
@@ -234,9 +252,10 @@ function status(cwd) {
 
 function sessionLesson(cwd, id) {
   const last = readJsonl(cwd, SESSIONS).filter((row) => row.sessionId === id).at(-1);
-  if (!last || (!last.tools && !last.errors?.length)) return "";
-  const failures = last.errors?.length ? ` failed_tools=${last.errors.join(",")}.` : "";
-  return `Same session last turn: tools=${last.tools}.${failures} Reuse known results; do not repeat failed calls unchanged.`;
+  if (!last || (!last.tools && !last.errors?.length && !last.ambiguous)) return "";
+  if (last.errors?.length) return `Same session last turn: tools=${last.tools}; failed_tools=${last.errors.join(",")}. Reuse known results; do not repeat failed calls unchanged.`;
+  if (last.ambiguous) return "Same session prior task lacked target and acceptance criteria. Use the user's clarification before acting.";
+  return `Same session last turn: tools=${last.tools}. Reuse known results.`;
 }
 
 function liveLesson(toolName) {
@@ -295,6 +314,7 @@ export default function tau(pi) {
       mode: next.mode,
       repeats: next.repeats,
       memoryLimit: next.memoryLimit,
+      ambiguity: next.ambiguity,
       startedAt: Date.now(),
       inputTokens: 0,
       outputTokens: 0,
@@ -351,6 +371,7 @@ export default function tau(pi) {
       sessionId: active.sessionId,
       tools: active.tools,
       errors: active.errors,
+      ambiguous: Boolean(active.ambiguity),
     });
   });
 
@@ -419,4 +440,4 @@ export default function tau(pi) {
   });
 }
 
-export { bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, trend, validRuns };

@@ -19,6 +19,7 @@ pi "fix this bug"
 - keeps the mode with better token/time medians after enough runs
 - stores optional local project memories in `.tau/memory.jsonl`
 - learns within a Pi session: one compact error steer, then a next-turn session hint
+- asks for target and acceptance criteria before acting on clearly ambiguous tasks
 - learns memory count per exact prompt: tests `0`, `1`, then `3` short hints; keeps only a Pareto-better option
 - never mutates Pi's active tool set
 
