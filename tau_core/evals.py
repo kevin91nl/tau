@@ -29,3 +29,25 @@ def cases(root: Path, split: str | None = None) -> list[dict]:
         if split is None or rec.get("split") == split:
             out.append(rec)
     return out
+
+
+def seed_cases(root: Path) -> list[dict]:
+    specs = []
+    groups = [
+        ("context-storm", 5),
+        ("stale-memory", 5),
+        ("cwd-scope", 5),
+        ("failing-test", 5),
+        ("tool-config", 5),
+        ("security", 4),
+        ("speed-fanout", 3),
+        ("subagent-reject", 2),
+        ("secret-redaction", 2),
+    ]
+    n = 0
+    for bucket, count in groups:
+        for i in range(count):
+            n += 1
+            split = "holdout" if n % 3 == 0 else "dev"
+            specs.append(add_case(root, f"{bucket}-{i + 1:02d}", f"Tau eval {bucket} case {i + 1}", bucket, split=split))
+    return specs

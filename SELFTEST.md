@@ -19,6 +19,9 @@ Verified smoke commands for bare Pi and the Tau context pack.
 | 11 | `python -m tau_cli.main diff` | Record observed git diff metadata. |
 | 12 | `python -m tau_cli.main cache put --prompt "p" --value "v"` | Store replay-cache record. |
 | 13 | `python -m tau_cli.main eval-case add --id c1 --prompt "p" --bucket b` | Store eval case. |
+| 14 | `python -m tau_cli.main eval-case seed` | Seed 36-case eval skeleton. |
+| 15 | `python -m tau_cli.main subagent advise --bucket b` | Check subagent ROI gate. |
+| 16 | `python -m tau_cli.main effect list` | List boundary effects. |
 
 ## Unit Tests
 

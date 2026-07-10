@@ -54,6 +54,9 @@ TauReviewer
 TauDiff
 TauCacheGet
 TauEvalCaseList
+TauEvalCaseSeed
+TauEffectList
+TauSubagentAdvise
 ```
 
 Or run the sidecar CLI:
@@ -131,4 +134,7 @@ python -m tau_cli.main diff
 python -m tau_cli.main accept --bucket fix-test
 python -m tau_cli.main cache put --prompt "fix" --value "known-good"
 python -m tau_cli.main eval-case add --id fix-001 --prompt "fix failing test" --bucket failing-test
+python -m tau_cli.main eval-case seed
+python -m tau_cli.main effect list
+python -m tau_cli.main subagent advise --bucket fix-test
 ```

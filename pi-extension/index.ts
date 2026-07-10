@@ -74,6 +74,13 @@ export default function(pi: ExtensionAPI) {
     ], cwd);
   });
 
+  pi.on("tool_result", (event, ctx) => {
+    const cwd = ctx.cwd || process.cwd();
+    const status = event.isError ? "failed" : "ok";
+    const refs = event.toolName ? [String(event.toolName)] : [];
+    runTau(["effect", "add", "--type", `tool_${event.toolName}`, "--status", status, "--scope", cwd, "--cwd", cwd, ...refs.flatMap((r) => ["--ref", r])], cwd);
+  });
+
   pi.registerTool({
     name: "TauAuto",
     label: "Tau Auto",
@@ -549,6 +556,47 @@ export default function(pi: ExtensionAPI) {
     }
   });
 
+  pi.registerTool({
+    name: "TauEvalCaseSeed",
+    label: "Tau Eval Case Seed",
+    description: "Seed Tau's 36-case local eval skeleton.",
+    parameters: Type.Object({
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      return textResult(runTau(["eval-case", "seed", "--cwd", cwd], cwd).text);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauEffectList",
+    label: "Tau Effect List",
+    description: "List recent Tau boundary effects.",
+    parameters: Type.Object({
+      limit: Type.Optional(Type.Number()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      return textResult(runTau(["effect", "list", "--limit", String(params.limit ?? 20), "--cwd", cwd], cwd).text);
+    }
+  });
+
+  pi.registerTool({
+    name: "TauSubagentAdvise",
+    label: "Tau Subagent Advise",
+    description: "Decide whether subagents are worth it for this bucket using measured ROI.",
+    parameters: Type.Object({
+      bucket: Type.String(),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      return textResult(runTau(["subagent", "advise", "--bucket", String(params.bucket), "--cwd", cwd], cwd).text);
+    }
+  });
+
   pi.registerCommand("tau", {
     description: "Tau help",
     async handler(_args, ctx) {
@@ -583,6 +631,9 @@ export default function(pi: ExtensionAPI) {
         "- TauDiff: record observed git diff",
         "- TauCacheGet: lookup replay cache",
         "- TauEvalCaseList: list local eval cases",
+        "- TauEvalCaseSeed: seed 36 local eval skeleton cases",
+        "- TauEffectList: list recent boundary effects",
+        "- TauSubagentAdvise: ROI gate for subagents",
         "",
         `Package root: ${root}`
       ].join("\n");

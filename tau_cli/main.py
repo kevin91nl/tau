@@ -10,9 +10,10 @@ from pathlib import Path
 from tau_core.ab import write_artifact
 from tau_core.config import PREFERRED_MODELS, TauConfig
 from tau_core.context import build_pack, find_root
+from tau_core.effects import add_effect, list_effects
+from tau_core.evals import add_case, cases, seed_cases
 from tau_core.lmstudio import doctor as lm_doctor
 from tau_core.locate_read import locate_read
-from tau_core.evals import add_case, cases
 from tau_core.memory import add_card, cards, compact_cards, promote_card
 from tau_core.memory_pack import pack_memory
 from tau_core.metrics import Timer, record_measurement, summarize_trends
@@ -26,6 +27,7 @@ from tau_core.state import append_jsonl, ensure_state, latest_run, run_id, write
 from tau_core.trace import event, read_events
 from tau_core.reviewer import scan_diff_file, scan_git_diff, record_roi
 from tau_core.replay_cache import cache_key, get as cache_get, put as cache_put
+from tau_core.subagents import advise as subagent_advise, record_roi as subagent_record_roi
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -77,6 +79,19 @@ def cmd_trace(args: argparse.Namespace) -> int:
     print("event | status | elapsed_ms | refs")
     for e in read_events(run):
         print(f"{e.get('type')} | {e.get('status')} | {e.get('elapsed_ms', '')} | {','.join(e.get('refs', []))}")
+    return 0
+
+
+def cmd_effect(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    if args.effect_cmd == "add":
+        obj = add_effect(root, args.type, status=args.status, scope=args.scope, refs=args.ref or [])
+        print(json.dumps(obj, indent=2, sort_keys=True))
+        return 0
+    print("type | status | scope | refs")
+    for row in list_effects(root, limit=args.limit):
+        print(f"{row.get('type')} | {row.get('status')} | {row.get('scope')} | {','.join(row.get('refs', []))}")
     return 0
 
 
@@ -228,10 +243,25 @@ def cmd_eval_case(args: argparse.Namespace) -> int:
         obj = add_case(root, args.id, args.prompt, args.bucket, split=args.split)
         print(json.dumps(obj, indent=2, sort_keys=True))
         return 0
+    if args.eval_case_cmd == "seed":
+        rows = seed_cases(root)
+        print(json.dumps({"seeded": len(rows)}, indent=2, sort_keys=True))
+        return 0
     rows = cases(root, split=args.split)
     print("id | split | bucket | prompt")
     for row in rows:
         print(f"{row['id']} | {row.get('split','dev')} | {row.get('bucket','')} | {row.get('prompt','')[:80]}")
+    return 0
+
+
+def cmd_subagent(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    if args.subagent_cmd == "record":
+        obj = subagent_record_roi(root, args.bucket, args.role, args.saved_s, args.integration_s, args.token_overhead_s)
+    else:
+        obj = subagent_advise(root, args.bucket)
+    print(json.dumps(obj, indent=2, sort_keys=True))
     return 0
 
 
@@ -541,6 +571,17 @@ def parser() -> argparse.ArgumentParser:
     tr = sub.add_parser("trace")
     add_common(tr)
     tr.add_argument("which", nargs="?", default="latest")
+    eff = sub.add_parser("effect")
+    eff_sub = eff.add_subparsers(dest="effect_cmd", required=True)
+    ea = eff_sub.add_parser("add")
+    add_common(ea)
+    ea.add_argument("--type", required=True)
+    ea.add_argument("--status", default="ok")
+    ea.add_argument("--scope", default=".")
+    ea.add_argument("--ref", action="append")
+    el = eff_sub.add_parser("list")
+    add_common(el)
+    el.add_argument("--limit", type=int, default=20)
     im = sub.add_parser("improve")
     add_common(im)
     im.add_argument("prompt")
@@ -659,6 +700,21 @@ def parser() -> argparse.ArgumentParser:
     ecl = ec_sub.add_parser("list")
     add_common(ecl)
     ecl.add_argument("--split")
+    ecs = ec_sub.add_parser("seed")
+    add_common(ecs)
+
+    subag = sub.add_parser("subagent")
+    subag_sub = subag.add_subparsers(dest="subagent_cmd", required=True)
+    sar = subag_sub.add_parser("record")
+    add_common(sar)
+    sar.add_argument("--bucket", required=True)
+    sar.add_argument("--role", choices=["locator", "builder", "reviewer"], required=True)
+    sar.add_argument("--saved-s", type=float, required=True)
+    sar.add_argument("--integration-s", type=float, required=True)
+    sar.add_argument("--token-overhead-s", type=float, required=True)
+    saa = subag_sub.add_parser("advise")
+    add_common(saa)
+    saa.add_argument("--bucket", required=True)
 
     learn = sub.add_parser("learn")
     add_common(learn)
@@ -731,6 +787,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_pack(args)
     if args.cmd == "trace":
         return cmd_trace(args)
+    if args.cmd == "effect":
+        return cmd_effect(args)
     if args.cmd == "status":
         return cmd_status(args)
     if args.cmd == "eval":
@@ -782,6 +840,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_cache(args)
     if args.cmd == "eval-case":
         return cmd_eval_case(args)
+    if args.cmd == "subagent":
+        return cmd_subagent(args)
     if args.cmd == "measure":
         if args.measure_cmd == "record":
             return cmd_measure_record(args)
