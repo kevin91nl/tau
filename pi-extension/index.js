@@ -468,10 +468,17 @@ function isExplorationCall(event) {
   return /\b(?:find|grep|rg)\b/.test(String(event.input?.command || ""));
 }
 
-function isFocusedTestDiscovery(event) {
-  if (event.toolName === "read") return /(^|\/)tests?\//.test(String(event.input?.path || ""));
+function isDirectTestRead(event) {
+  return event.toolName === "read" && /(^|\/)tests?\//.test(String(event.input?.path || ""));
+}
+
+function isFocusedTestSearch(event) {
   const command = String(event.input?.command || "");
   return event.toolName === "bash" && /\b(?:find|grep|rg)\b/.test(command) && /\btests?\b/.test(command);
+}
+
+function isFocusedTestDiscovery(event) {
+  return isDirectTestRead(event) || isFocusedTestSearch(event);
 }
 
 function bashOutputFailed(content) {
@@ -847,7 +854,8 @@ export default function tau(pi) {
       actionRequired: false,
       autoResumed: false,
       focusSteered: false,
-      verificationDiscoveryUsed: false,
+      testSearchUsed: false,
+      testReadUsed: false,
       failedCalls: new Set(),
       seenExplorationCalls: new Set(),
       files: new Set(),
@@ -945,7 +953,11 @@ export default function tau(pi) {
     if (active?.ambiguity) {
       return { block: true, reason: "Tau: task is ambiguous. Ask one concise clarification for target and acceptance criteria before using tools." };
     }
-    const focusedTestDiscovery = Boolean(active && isFocusedTestDiscovery(event) && !active.verificationDiscoveryUsed);
+    // A search result does not replace reading the relevant test. Keep both
+    // allowances tiny, but preserve the normal diagnose -> test -> edit flow.
+    const focusedTestSearch = Boolean(active && isFocusedTestSearch(event) && !active.testSearchUsed);
+    const directTestRead = Boolean(active && isDirectTestRead(event) && !active.testReadUsed);
+    const focusedTestDiscovery = focusedTestSearch || directTestRead;
     const focusedTarget = isFocusedTargetCall(event, active);
     if (active?.focusSteered && isExplorationCall(event) && !focusedTestDiscovery && !focusedTarget) {
       return { block: true, reason: "Tau: exploration budget exhausted. Make the smallest justified edit or run a focused test." };
@@ -953,7 +965,8 @@ export default function tau(pi) {
     if (active?.actionRequired && isExplorationCall(event) && !focusedTestDiscovery) {
       return { block: true, reason: "Tau: root cause is proven. Edit the predicate now, then run the focused test; do not inspect more files." };
     }
-    if (focusedTestDiscovery) active.verificationDiscoveryUsed = true;
+    if (focusedTestSearch) active.testSearchUsed = true;
+    if (directTestRead) active.testReadUsed = true;
     const path = sourcePath(event.input);
     if (active && path) active.files.add(path);
     if (active && event.toolName === "bash") {
@@ -1068,4 +1081,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashOutputFailed, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, sourcePathsFromContent, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashOutputFailed, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isDirectTestRead, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isFocusedTestSearch, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, sourcePathsFromContent, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };

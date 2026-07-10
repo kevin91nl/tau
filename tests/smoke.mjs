@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bashOutputFailed, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, sourcePathsFromContent, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bashOutputFailed, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isDirectTestRead, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isFocusedTestSearch, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, sourcePathsFromContent, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -27,6 +27,8 @@ try {
   assert.equal(bashOutputFailed([{ type: "text", text: "1 passed" }]), false);
   assert.equal(isFocusedTestDiscovery({ toolName: "bash", input: { command: "rg -n dedupe tests" } }), true);
   assert.equal(isFocusedTestDiscovery({ toolName: "read", input: { path: "tests/unit/test_dedupe.py" } }), true);
+  assert.equal(isFocusedTestSearch({ toolName: "bash", input: { command: "rg -n dedupe tests" } }), true);
+  assert.equal(isDirectTestRead({ toolName: "read", input: { path: "tests/unit/test_dedupe.py" } }), true);
   assert.equal(promptHash("same"), promptHash("same"));
   assert.equal(repeatGuidance(0), "");
   assert.match(repeatGuidance(2), /no extra checks/);
@@ -252,6 +254,9 @@ try {
   handlers.tool_result({ toolName: "read", isError: false, content: [{ type: "text", text: "def item_is_open(x):\n return x not in open_statuses" }] }, invariantCtx);
   assert.equal(sent.at(-1).message.customType, "tau.invariant");
   assert.equal(handlers.tool_call({ toolName: "read", input: { path: "other.py" } }, invariantCtx).block, true);
+  assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "rg -n item_is_open tests" } }, invariantCtx), undefined);
+  assert.equal(handlers.tool_call({ toolName: "read", input: { path: "tests/unit/test_dedupe.py" } }, invariantCtx), undefined);
+  assert.equal(handlers.tool_call({ toolName: "read", input: { path: "tests/unit/test_more.py" } }, invariantCtx).block, true);
   handlers.tool_result({ toolName: "edit", isError: false }, invariantCtx);
   assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "rg -n dedupe tests" } }, invariantCtx), undefined);
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 } } }, invariantCtx);
