@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, normalizeMacSed, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -46,6 +46,8 @@ try {
   assert.match(narrowBashCommand("find /repo -type f -name '*.py' | head -80", "Fix runtime dedupe defect"), /rg -n -i/);
   assert.equal(narrowBashCommand("cat src/app.py", "Fix app"), "sed -n '1,240p' src/app.py");
   assert.equal(narrowBashCommand("pytest tests/unit/test_app.py", "Fix app"), "");
+  assert.equal(normalizeMacSed("sed -i 's/a/b/' file.js", "darwin"), "sed -i '' 's/a/b/' file.js");
+  assert.equal(normalizeMacSed("sed -i 's/a/b/' file.js", "linux"), "sed -i 's/a/b/' file.js");
   assert.deepEqual(sourcePathsFromCommand("sed -n '1,80p' src/runtime/dedupe.py tests/test_dedupe.py"), ["src/runtime/dedupe.py", "tests/test_dedupe.py"]);
   assert.match(focusLesson(new Set(["src/a.py"])), /enough exploration/);
   assert.equal(isExplorationCall({ toolName: "bash", input: { command: "grep -rn x src" } }), true);

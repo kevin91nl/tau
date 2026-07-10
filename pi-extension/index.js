@@ -555,6 +555,11 @@ function narrowBashCommand(command, prompt) {
   return "";
 }
 
+function normalizeMacSed(command, platform = process.platform) {
+  if (platform !== "darwin") return String(command || "");
+  return String(command || "").replace(/\bsed\s+-i\s+(?!''\s)/g, "sed -i '' ");
+}
+
 function appendAutoReflection(active) {
   if (active.ambiguity || active.errors.length || !active.files.size) return;
   const files = [...active.files].slice(0, 3);
@@ -808,8 +813,10 @@ export default function tau(pi) {
     }
     if (event.toolName === "bash" && active && typeof event.input?.command === "string") {
       const narrowed = narrowBashCommand(event.input.command, active.prompt);
-      if (narrowed) {
-        event.input.command = narrowed;
+      const command = narrowed || event.input.command;
+      const normalized = normalizeMacSed(command);
+      if (narrowed || normalized !== event.input.command) {
+        event.input.command = normalized;
         active.readCaps += 1;
       }
     }
@@ -894,4 +901,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, normalizeMacSed, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
