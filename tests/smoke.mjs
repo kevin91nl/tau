@@ -205,6 +205,13 @@ try {
   const autoMemory = listedMemories(dir).at(-1);
   assert.equal(autoMemory.text.includes("tests/unit/test_company_agent.py"), true);
   const liveCtx = { cwd: dir, sessionManager: { getSessionId() { return "live"; } } };
+  const invariantCtx = { cwd: dir, sessionManager: { getSessionId() { return "invariant"; } } };
+  handlers.before_agent_start({ prompt: "Target: runtime predicate. Acceptance: repair it.", systemPrompt: "base" }, invariantCtx);
+  handlers.tool_result({ toolName: "read", isError: false, content: [{ type: "text", text: "def item_is_open(x):\n return x not in open_statuses" }] }, invariantCtx);
+  assert.equal(sent.at(-1).message.customType, "tau.invariant");
+  assert.equal(handlers.tool_call({ toolName: "read", input: { path: "other.py" } }, invariantCtx).block, true);
+  handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 } } }, invariantCtx);
+  handlers.agent_end({}, invariantCtx);
   const focusCtx = { cwd: dir, sessionManager: { getSessionId() { return "focus"; } } };
   handlers.before_agent_start({ prompt: "Fix tests/focus.py failure", systemPrompt: "base" }, focusCtx);
   for (let i = 0; i < 4; i += 1) handlers.tool_result({ toolName: "bash", isError: false }, focusCtx);
@@ -218,7 +225,7 @@ try {
   assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "grep -rn dedupe src" } }, liveCtx).block, true);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
-  assert.equal(sent.length, 2);
+  assert.equal(sent.length, 3);
   assert.equal(sent.at(-1).options.deliverAs, "steer");
   assert.match(sent.at(-1).message.content, /do not repeat unchanged/);
   const blocked = handlers.tool_call({ toolName: "bash", input: {} }, liveCtx);

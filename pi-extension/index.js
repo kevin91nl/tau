@@ -725,6 +725,7 @@ export default function tau(pi) {
       errors: [],
       steeredErrors: new Set(),
       semanticSteers: new Set(),
+      actionRequired: false,
       focusSteered: false,
       failedCalls: new Set(),
       seenExplorationCalls: new Set(),
@@ -781,6 +782,7 @@ export default function tau(pi) {
     const invariant = predicateInvariantLesson(event.content);
     if (invariant && !active.semanticSteers.has(invariant)) {
       active.semanticSteers.add(invariant);
+      active.actionRequired = true;
       pi.sendMessage({ customType: "tau.invariant", content: invariant, display: "Tau" }, { deliverAs: "steer" });
     }
     if (!event.isError && !active.focusSteered && active.tools >= 4 && (active.taskKind === "code-fix" || active.taskKind === "implementation")) {
@@ -807,6 +809,9 @@ export default function tau(pi) {
     }
     if (active?.focusSteered && isExplorationCall(event)) {
       return { block: true, reason: "Tau: exploration budget exhausted. Make the smallest justified edit or run a focused test." };
+    }
+    if (active?.actionRequired && isExplorationCall(event)) {
+      return { block: true, reason: "Tau: root cause is proven. Edit the predicate now, then run the focused test; do not inspect more files." };
     }
     const path = sourcePath(event.input);
     if (active && path) active.files.add(path);
