@@ -17,10 +17,10 @@ pi "fix this bug"
 - records tokens, elapsed time, and tool count in `.tau/runs.jsonl`
 - tries a smaller `candidate` mode after one baseline run
 - keeps the mode with better token/time medians after enough runs
-- automatically derives compact, bucket-scoped navigation hints from completed tool evidence
+- automatically derives compact, bucket-scoped navigation hints from accepted no-memory tool evidence
 - learns within a Pi session: one compact error steer, then a next-turn session hint
 - asks for target and acceptance criteria before acting on clearly ambiguous tasks
-- learns memory count per exact prompt: tests `0`, `1`, then `3` short hints; keeps only a Pareto-better option
+- learns memory count per exact prompt: tries `0`, then bounded `1`/`3` short hints only while earlier trials are not materially worse
 - caps broad Pi file reads at 240 lines; rewrites root-wide `find` and plain `cat` discovery to narrow `rg`/`sed` reads
 - compacts oversized `AGENTS.md` context into a bounded policy capsule for local models; original instructions remain task-readable and authoritative
 - never mutates Pi's active tool set
@@ -62,7 +62,7 @@ Run Pi twice with a similar prompt, then inspect:
 cat .tau/runs.jsonl
 ```
 
-You should see the first run as `current` and later similar runs as `candidate`. Compare exact `promptHash` rows, `totalTokens`, `elapsedMs`, `tools`, and `memoryLimit`. Tau explores only `0`, `1`, `3` memory hints, then retains an option only when it is no worse on both tokens and elapsed time.
+You should see the first run as `current` and later similar runs as `candidate`. Compare exact `promptHash` rows, `totalTokens`, `elapsedMs`, `tools`, and `memoryLimit`. Tau tries `0`, then `1`/`3` memory hints only while prior memory trials remain within a 20% token/time loss guard. It retains an option only when it is no worse on both tokens and elapsed time.
 
 ## Commands And Tools
 
