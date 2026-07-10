@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bashOutputFailed, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, hasMateriallyWorseMemoryTrial, instruction, isDirectTestRead, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isFocusedTestSearch, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, sourcePathsFromContent, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bashOutputFailed, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, hasMateriallyWorseMemoryTrial, instruction, isDirectTestRead, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isFocusedTestSearch, isPlanningPrompt, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, sourcePathsFromContent, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -11,6 +11,8 @@ process.env.TAU_HOME = join(dir, "tau-home");
 try {
   assert.equal(bucketFromPrompt("Fix failing test now"), "fix-failing-test");
   assert.equal(taskKind("Fix failing test now"), "code-fix");
+  assert.equal(isPlanningPrompt("Maak een plan voor de importfout"), true);
+  assert.equal(taskKind("Maak een plan voor src/import.js"), "planning");
   assert.equal(isSimplePrompt("Reply exactly: OK"), true);
   assert.equal(isSimplePrompt("fix this bug"), false);
   assert.equal(median([3, 1, 2]), 2);
@@ -343,6 +345,11 @@ try {
   assert.match(clarified.systemPrompt, /Same session prior task lacked target/);
   assert.deepEqual(ambiguityStats(dir), { asked: 1, resolved: 1, positive: 0, negative: 0 });
   handlers.agent_end({}, ambiguousCtx);
+  const planCtx = { cwd: dir, sessionManager: { getSessionId() { return "plan"; } } };
+  const planning = handlers.before_agent_start({ prompt: "Maak een plan voor src/app.js", systemPrompt: "base" }, planCtx);
+  assert.match(planning.systemPrompt, /Planning task/);
+  assert.equal(handlers.tool_call({ toolName: "edit", input: { path: "src/app.js" } }, planCtx).block, true);
+  handlers.agent_end({}, planCtx);
 } finally {
   if (priorTauHome === undefined) delete process.env.TAU_HOME;
   else process.env.TAU_HOME = priorTauHome;

@@ -137,11 +137,21 @@ function bucketFromPrompt(prompt) {
 function taskKind(prompt) {
   const text = String(prompt || "").toLowerCase();
   if (ambiguityReason(prompt)) return "ambiguous";
+  if (isPlanningPrompt(text)) return "planning";
   if (/\b(fix|bug|error|fail|debug|regression)\b/.test(text)) return "code-fix";
   if (/\b(test|validate|verify|assert)\b/.test(text)) return "verification";
   if (/\b(add|implement|build|create|write)\b/.test(text)) return "implementation";
   if (/\b(read-only|inspect|review|determine|explain|where|why)\b/.test(text)) return "inspection";
   return isSimplePrompt(prompt) ? "simple" : "other";
+}
+
+function isPlanningPrompt(prompt) {
+  return /\b(?:make|create|write|draft|maak|schrijf)\s+(?:(?:an?|een)\s+)?plan\b|\b(?:implementation|technical) plan\b|\bplan van aanpak\b/.test(String(prompt || "").toLowerCase());
+}
+
+function taskGuidance(kind) {
+  if (kind !== "planning") return "";
+  return "Planning task: inspect only what is needed. Do not edit. Return a concise goal, affected files, ordered steps, verification, and risks/unknowns.";
 }
 
 function promptHash(prompt) {
@@ -325,6 +335,7 @@ function instruction(cwd, prompt, lesson = "", scope = "default") {
       repeatGuidance(repeats),
       memories.length ? memoryPrompt(memories) : "",
       ambiguityGuidance(ambiguity),
+      taskGuidance(kind),
       lesson,
       "Before tools, assess scope. If target or observable acceptance criteria are missing, ask one concise clarification and wait; do not inspect first.",
       `Context budget: use grep to locate symbols, then read only the needed range. Tau caps each read at ${MAX_READ_LINES} lines; if output is truncated, grep and reread a narrow offset.`,
@@ -987,6 +998,9 @@ export default function tau(pi) {
     if (active?.ambiguity) {
       return { block: true, reason: "Tau: task is ambiguous. Ask one concise clarification for target and acceptance criteria before using tools." };
     }
+    if (active?.taskKind === "planning" && (event.toolName === "edit" || event.toolName === "write")) {
+      return { block: true, reason: "Tau: this is a planning task. Inspect if needed, but do not modify files." };
+    }
     // A search result does not replace reading the relevant test. Keep both
     // allowances tiny, but preserve the normal diagnose -> test -> edit flow.
     const focusedTestSearch = Boolean(active && isFocusedTestSearch(event) && !active.testSearchUsed);
@@ -1112,4 +1126,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashOutputFailed, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, hasMateriallyWorseMemoryTrial, instruction, interruptActiveRun, isDirectTestRead, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isFocusedTestSearch, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, sourcePathsFromContent, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashOutputFailed, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactAutoMemory, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, hasMateriallyWorseMemoryTrial, instruction, interruptActiveRun, isDirectTestRead, isExplorationCall, isFocusedTargetCall, isFocusedTestDiscovery, isFocusedTestSearch, isPlanningPrompt, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, lmStudioParallelOneModel, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, policyScope, predicateInvariantLesson, projectRelativePath, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, sourcePathsFromContent, status, taskKind, tauDir, toolCallKey, trend, unverifiedSymbolFooter, validRuns };
