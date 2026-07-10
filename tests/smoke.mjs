@@ -254,6 +254,7 @@ try {
   const ambiguousCtx = { cwd: dir, sessionManager: { getSessionId() { return "ambiguous"; } } };
   const ambiguous = handlers.before_agent_start({ prompt: "Fix it.", systemPrompt: "base" }, ambiguousCtx);
   assert.match(ambiguous.systemPrompt, /Task ambiguous/);
+  assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "pwd" } }, ambiguousCtx).block, true);
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 }, content: [{ type: "text", text: "What target and acceptance criteria?" }] } }, ambiguousCtx);
   handlers.agent_end({}, ambiguousCtx);
   const clarified = handlers.before_agent_start({ prompt: "Fix tests/unit/test_json_payload.py", systemPrompt: "base" }, ambiguousCtx);

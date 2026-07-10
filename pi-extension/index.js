@@ -800,6 +800,9 @@ export default function tau(pi) {
 
   pi.on("tool_call", (event, ctx) => {
     const active = activeRuns.get(runKey(ctx));
+    if (active?.ambiguity) {
+      return { block: true, reason: "Tau: task is ambiguous. Ask one concise clarification for target and acceptance criteria before using tools." };
+    }
     const path = sourcePath(event.input);
     if (active && path) active.files.add(path);
     if (active && event.toolName === "bash") {
