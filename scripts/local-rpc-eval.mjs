@@ -23,6 +23,18 @@ function startRpc(tools) {
   let output = "";
   let stderr = "";
   let pending;
+  let rejectPending;
+  function failPending(error) {
+    if (!pending || !rejectPending) return;
+    const reject = rejectPending;
+    pending = undefined;
+    rejectPending = undefined;
+    reject(error);
+  }
+  child.once("error", (error) => failPending(error));
+  child.once("exit", (code, signal) => {
+    failPending(new Error(`RPC eval exited before settle: code=${code} signal=${signal}. ${stderr}`));
+  });
   child.stderr.on("data", (chunk) => { stderr += chunk; });
   child.stdout.on("data", (chunk) => {
     output += chunk;
@@ -48,10 +60,14 @@ function startRpc(tools) {
         resolvePrompt();
       };
       const timer = setTimeout(() => {
-        if (pending === settle) pending = undefined;
+        if (pending === settle) {
+          pending = undefined;
+          rejectPending = undefined;
+        }
         rejectPrompt(new Error(`RPC eval timed out after ${timeoutMs}ms. ${stderr}`));
       }, timeoutMs);
       pending = settle;
+      rejectPending = rejectPrompt;
       child.stdin.write(`${JSON.stringify({ id: "eval", type: "prompt", message })}\n`);
     });
   }
