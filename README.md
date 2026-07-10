@@ -116,7 +116,7 @@ npm test
 npm run check
 ```
 
-Run local-model evaluation separately. It creates a temporary project and checks English/Dutch ambiguity handling, clarification feedback, concrete scope, a sealed file edit, and live tool-failure learning.
+Run local-model evaluation separately. It uses Pi RPC, so a multi-tool task is evaluated through normal `agent_settled` completion rather than `-p` process exit. It creates a temporary project and checks ambiguity gating plus a sealed multi-tool file edit.
 
 ```bash
 TAU_PI_BIN="$(command -v pi)" TAU_EVAL_MODEL=qwen3.6-35b-a3b-ud-mlx npm run eval:local
