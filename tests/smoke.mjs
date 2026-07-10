@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, evidenceFooter, failureFooter, feedbackOutcome, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, evidenceFooter, failureFooter, feedbackOutcome, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -40,6 +40,9 @@ try {
   assert.equal(needsRuntimeProof("Does it fail at runtime?"), true);
   const cappedBash = capToolContent([{ type: "text", text: "x".repeat(MAX_BASH_OUTPUT_CHARS + 1) }]);
   assert.match(cappedBash.at(-1).text, /Tau truncated tool output/);
+  assert.match(narrowBashCommand("find /repo -type f -name '*.py' | head -80", "Fix runtime dedupe defect"), /rg -n -i/);
+  assert.equal(narrowBashCommand("cat src/app.py", "Fix app"), "sed -n '1,240p' src/app.py");
+  assert.equal(narrowBashCommand("pytest tests/unit/test_app.py", "Fix app"), "");
   assert.match(evidenceFooter(), /cannot verify/);
   assert.match(failureFooter(), /tools failed/);
   const first = instruction(dir, "Fix failing test now");

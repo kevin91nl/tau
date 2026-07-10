@@ -21,7 +21,7 @@ pi "fix this bug"
 - learns within a Pi session: one compact error steer, then a next-turn session hint
 - asks for target and acceptance criteria before acting on clearly ambiguous tasks
 - learns memory count per exact prompt: tests `0`, `1`, then `3` short hints; keeps only a Pareto-better option
-- caps broad Pi file reads at 240 lines and steers follow-up reads through grep plus a narrow offset
+- caps broad Pi file reads at 240 lines; rewrites root-wide `find` and plain `cat` discovery to narrow `rg`/`sed` reads
 - never mutates Pi's active tool set
 
 Tau is local-only. No daemon. No database. No embeddings. No external service.

@@ -455,6 +455,24 @@ function sourcePath(input) {
   return /\.[a-z0-9]+$/i.test(path) ? path.slice(0, 180) : "";
 }
 
+function bashSearchTerms(prompt) {
+  const ignored = new Set(["acceptance", "add", "and", "bug", "code", "defect", "find", "fix", "for", "from", "only", "scope", "test", "tests", "the", "this", "with"]);
+  return String(prompt || "").toLowerCase().match(/[a-z][a-z0-9_-]{2,}/g)?.filter((word) => !ignored.has(word)).slice(0, 3) || ["todo"];
+}
+
+function narrowBashCommand(command, prompt) {
+  const value = String(command || "").trim();
+  const findPrefix = value.match(/^(.*?)(?:find\s+\S+\s+-type\s+f\s+-name\s+['\"][^'\"]+['\"](?:\s*\|\s*head(?:\s+-\d+)?)?)\s*$/);
+  if (findPrefix) {
+    const prefix = findPrefix[1];
+    const pattern = bashSearchTerms(prompt).join("|");
+    return `${prefix}rg -n -i --glob '*.{py,js,mjs,ts,tsx}' '${pattern}' src tests`;
+  }
+  const cat = value.match(/^(.*?)(?:cat\s+)((?:[^\s;&|]+))\s*$/);
+  if (cat) return `${cat[1]}sed -n '1,${MAX_READ_LINES}p' ${cat[2]}`;
+  return "";
+}
+
 function appendAutoReflection(active) {
   if (active.ambiguity || active.errors.length || !active.files.size) return;
   const files = [...active.files].slice(0, 3);
@@ -614,6 +632,7 @@ export default function tau(pi) {
       steeredErrors: new Set(),
       failedCalls: new Set(),
       files: new Set(),
+      prompt,
       requiresRuntimeProof: needsRuntimeProof(prompt),
       attemptId: `${Date.now().toString(36)}-${++attemptSequence}`,
     });
@@ -675,6 +694,13 @@ export default function tau(pi) {
       if (!Number.isFinite(requested) || requested <= 0 || requested > MAX_READ_LINES) {
         event.input.limit = MAX_READ_LINES;
         if (active) active.readCaps += 1;
+      }
+    }
+    if (event.toolName === "bash" && active && typeof event.input?.command === "string") {
+      const narrowed = narrowBashCommand(event.input.command, active.prompt);
+      if (narrowed) {
+        event.input.command = narrowed;
+        active.readCaps += 1;
       }
     }
     if (active?.failedCalls.has(toolCallKey(event))) {
@@ -751,4 +777,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, needsRuntimeProof, needsMemoryExploration, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, status, taskKind, tauDir, toolCallKey, trend, validRuns };
