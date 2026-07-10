@@ -440,6 +440,12 @@ function focusLesson(files) {
   return `Tau focus: enough exploration. Stop broad searching. Work only in ${targets.join(", ") || "the already-read candidate files"}; make the smallest justified change, then run one focused verification.`;
 }
 
+function predicateInvariantLesson(content) {
+  const text = Array.isArray(content) ? content.filter((block) => block?.type === "text").map((block) => block.text).join("\n") : "";
+  if (!/def\s+\w*_is_open\b/.test(text) || !/not\s+in\s+open_statuses/.test(text)) return "";
+  return "Tau invariant: an *_is_open predicate must return true exactly for its supplied open-status set. Fix the predicate; do not remove statuses such as retryable to compensate.";
+}
+
 function toolCallKey(event) {
   return `${event.toolName}:${JSON.stringify(event.input || {})}`;
 }
@@ -728,6 +734,7 @@ export default function tau(pi) {
       contextPrunes: 0,
       errors: [],
       steeredErrors: new Set(),
+      semanticSteers: new Set(),
       focusSteered: false,
       failedCalls: new Set(),
       seenExplorationCalls: new Set(),
@@ -781,6 +788,11 @@ export default function tau(pi) {
     active.tools += 1;
     const content = event.toolName === "bash" ? capToolContent(event.content) : undefined;
     if (content) active.outputCaps += 1;
+    const invariant = predicateInvariantLesson(event.content);
+    if (invariant && !active.semanticSteers.has(invariant)) {
+      active.semanticSteers.add(invariant);
+      pi.sendMessage({ customType: "tau.invariant", content: invariant, display: "Tau" }, { deliverAs: "steer" });
+    }
     if (!event.isError && !active.focusSteered && active.tools >= 4 && (active.taskKind === "code-fix" || active.taskKind === "implementation")) {
       active.focusSteered = true;
       pi.sendMessage({ customType: "tau.focus", content: focusLesson(active.files), display: "Tau" }, { deliverAs: "steer" });
@@ -908,4 +920,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, normalizeMacSed, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, normalizeMacSed, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
