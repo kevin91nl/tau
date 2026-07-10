@@ -423,6 +423,11 @@ function liveLesson(toolName) {
   return `Tau live lesson: ${toolName} failed. Read its error; do not repeat unchanged.`;
 }
 
+function focusLesson(files) {
+  const targets = [...files].slice(-3);
+  return `Tau focus: enough exploration. Stop broad searching. Work only in ${targets.join(", ") || "the already-read candidate files"}; make the smallest justified change, then run one focused verification.`;
+}
+
 function toolCallKey(event) {
   return `${event.toolName}:${JSON.stringify(event.input || {})}`;
 }
@@ -678,6 +683,7 @@ export default function tau(pi) {
       outputCaps: 0,
       errors: [],
       steeredErrors: new Set(),
+      focusSteered: false,
       failedCalls: new Set(),
       files: new Set(),
       prompt,
@@ -721,6 +727,10 @@ export default function tau(pi) {
     active.tools += 1;
     const content = event.toolName === "bash" ? capToolContent(event.content) : undefined;
     if (content) active.outputCaps += 1;
+    if (!event.isError && !active.focusSteered && active.tools >= 4 && (active.taskKind === "code-fix" || active.taskKind === "implementation")) {
+      active.focusSteered = true;
+      pi.sendMessage({ customType: "tau.focus", content: focusLesson(active.files), display: "Tau" }, { deliverAs: "steer" });
+    }
     if (!event.isError) return content ? { content } : undefined;
     active.failedCalls.add(toolCallKey(event));
     if (active.steeredErrors.has(event.toolName)) return content ? { content } : undefined;
@@ -829,4 +839,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };

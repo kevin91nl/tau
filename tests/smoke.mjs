@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -44,6 +44,7 @@ try {
   assert.equal(narrowBashCommand("cat src/app.py", "Fix app"), "sed -n '1,240p' src/app.py");
   assert.equal(narrowBashCommand("pytest tests/unit/test_app.py", "Fix app"), "");
   assert.deepEqual(sourcePathsFromCommand("sed -n '1,80p' src/runtime/dedupe.py tests/test_dedupe.py"), ["src/runtime/dedupe.py", "tests/test_dedupe.py"]);
+  assert.match(focusLesson(new Set(["src/a.py"])), /enough exploration/);
   assert.equal(needsSingleToolMode({ model: { provider: "lmstudio", id: "qwen3.6-35b-a3b-ud-mlx" } }), true);
   assert.equal(needsSingleToolMode({ model: { provider: "lmstudio", id: "other" } }), false);
   const longSystemPrompt = `base rules\n<project_context>\n# Policy\n- Never deploy locally.\n${"filler ".repeat(5_000)}\n</project_context>`;
@@ -185,12 +186,18 @@ try {
   const autoMemory = listedMemories(dir).at(-1);
   assert.equal(autoMemory.text.includes("tests/unit/test_company_agent.py"), true);
   const liveCtx = { cwd: dir, sessionManager: { getSessionId() { return "live"; } } };
+  const focusCtx = { cwd: dir, sessionManager: { getSessionId() { return "focus"; } } };
+  handlers.before_agent_start({ prompt: "Fix tests/focus.py failure", systemPrompt: "base" }, focusCtx);
+  for (let i = 0; i < 4; i += 1) handlers.tool_result({ toolName: "bash", isError: false }, focusCtx);
+  assert.equal(sent.at(-1).message.customType, "tau.focus");
+  handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 } } }, focusCtx);
+  handlers.agent_end({}, focusCtx);
   handlers.before_agent_start({ prompt: "Fix tests/live failure", systemPrompt: "base" }, liveCtx);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
   handlers.tool_result({ toolName: "bash", isError: true }, liveCtx);
-  assert.equal(sent.length, 1);
-  assert.equal(sent[0].options.deliverAs, "steer");
-  assert.match(sent[0].message.content, /do not repeat unchanged/);
+  assert.equal(sent.length, 2);
+  assert.equal(sent.at(-1).options.deliverAs, "steer");
+  assert.match(sent.at(-1).message.content, /do not repeat unchanged/);
   const blocked = handlers.tool_call({ toolName: "bash", input: {} }, liveCtx);
   assert.equal(blocked.block, true);
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 }, content: [{ type: "text", text: "failed" }] } }, liveCtx);
