@@ -4,15 +4,16 @@
   "description": "Tau: tiny auto-learning layer for Pi.",
   "type": "module",
   "main": "pi-extension/index.js",
+  "exports": "./pi-extension/index.js",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "test": "node tests/smoke.mjs"
+    "test": "node tests/smoke.mjs",
+    "check": "npm test && npm pack --dry-run"
   },
   "files": [
     "pi-extension",
-    "tests",
     "README.md"
   ],
   "keywords": [
@@ -24,6 +25,10 @@
     "lm-studio"
   ],
   "license": "MIT",
+  "homepage": "https://github.com/kevin91nl/tau#readme",
+  "bugs": {
+    "url": "https://github.com/kevin91nl/tau/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/kevin91nl/tau.git"

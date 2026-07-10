@@ -64,7 +64,9 @@ function bucketFromPrompt(prompt) {
 function median(values) {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)];
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[middle];
+  return (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
 function trend(cwd, bucket) {
@@ -173,17 +175,22 @@ function textResult(text, details) {
   return { content: [{ type: "text", text }], details };
 }
 
+function listedMemories(cwd) {
+  return readMemoryJsonl(cwd).map((row) => ({
+    ts: row.ts || null,
+    text: safeMemoryText(row.text),
+  }));
+}
+
 const activeRuns = new Map();
-let rememberedTools;
 
 export default function tau(pi) {
   pi.on("before_agent_start", (event, ctx) => {
     const cwd = ctx.cwd || process.cwd();
-    if (!rememberedTools && typeof pi.getActiveTools === "function") {
-      rememberedTools = pi.getActiveTools();
-    }
+    const key = runKey(ctx);
+    activeRuns.delete(key);
     const next = instruction(cwd, event.prompt || "");
-    activeRuns.set(runKey(ctx), {
+    activeRuns.set(key, {
       cwd,
       bucket: next.bucket,
       mode: next.mode,
@@ -192,11 +199,6 @@ export default function tau(pi) {
       outputTokens: 0,
       tools: 0,
     });
-    if (next.simple && next.mode === "candidate" && typeof pi.setActiveTools === "function") {
-      pi.setActiveTools([]);
-    } else if (rememberedTools && typeof pi.setActiveTools === "function") {
-      pi.setActiveTools(rememberedTools);
-    }
     return { systemPrompt: `${event.systemPrompt}\n\n<tau>\n${next.text}\n</tau>` };
   });
 
@@ -273,7 +275,7 @@ export default function tau(pi) {
     parameters: schema({ cwd: optionalString() }),
     async execute(_id, params, _signal, _update, ctx) {
       const cwd = params.cwd || ctx.cwd || process.cwd();
-      return textResult(JSON.stringify(readMemoryJsonl(cwd), null, 2));
+      return textResult(JSON.stringify(listedMemories(cwd), null, 2));
     },
   });
 
@@ -296,4 +298,4 @@ export default function tau(pi) {
   });
 }
 
-export { bucketFromPrompt, instruction, isSimplePrompt, median, memoryPrompt, modeFor, recentMemories, runKey, safeMemoryText, status, tauDir, trend };
+export { bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryPrompt, modeFor, recentMemories, runKey, safeMemoryText, status, tauDir, trend };

@@ -1,38 +1,96 @@
 # Tau
 
-Tau is a tiny Pi extension that learns silently while you keep using Pi normally.
+Tau is a tiny local auto-learning layer for Pi.
+
+Install once. Keep using Pi normally. Tau silently records local run metrics and uses them to steer later similar runs toward smaller measured context and elapsed time.
 
 ```bash
+cd /path/to/your/project
 pi install git:github.com/kevin91nl/tau -l --approve
 pi "fix this bug"
 ```
 
-Tau records local run metrics in `.tau/runs.jsonl`, then uses those metrics to keep future context smaller for similar prompts.
+## What Tau Does
 
-## What It Does Now
+- injects one short hidden instruction before each Pi run
+- buckets similar prompts, for example `fix-failing-test`
+- records tokens, elapsed time, and tool count in `.tau/runs.jsonl`
+- tries a smaller `candidate` mode after one baseline run
+- keeps the mode with better token/time medians after enough runs
+- stores optional local project memories in `.tau/memory.jsonl`
+- injects at most 3 short memory hints, only for candidate coding runs
+- never mutates Pi's active tool set
 
-- injects a short hidden instruction before each Pi run
-- buckets prompts by task type
-- records elapsed time, token usage, and tool count
-- tries a smaller `candidate` context mode after one `current` run
-- keeps the better mode once enough data exists
-- stores optional short project memories
+Tau is local-only. No daemon. No database. No embeddings. No external service.
 
-## Pi Tools
+## Requirements
 
-- `TauStatus`
-- `TauTrend`
-- `TauMemoryAdd`
-- `TauMemoryList`
+- Pi installed
+- Node 18+
+- any Pi model setup, local or remote
 
-## Files
+Tau does not configure models. For LM Studio, configure Pi as usual, then install Tau.
+
+## Verify Install
+
+```bash
+cd /path/to/your/project
+pi list --approve
+```
+
+Expected: Tau listed under project packages.
+
+Run Pi twice with a similar prompt, then inspect:
+
+```bash
+cat .tau/runs.jsonl
+```
+
+You should see the first run as `current` and later similar runs as `candidate`. Compare `totalTokens`, `elapsedMs`, and `tools` to verify whether the candidate mode is helping for that task.
+
+## Commands And Tools
+
+Slash command:
+
+- `/tau` - status in interactive Pi
+
+Pi tools:
+
+- `TauStatus` - local run count and last mode
+- `TauTrend` - token/time/tool medians per bucket
+- `TauMemoryAdd` - add one short factual project hint
+- `TauMemoryList` - list local project hints
+
+## Data Files
+
+Tau writes only inside the current project:
 
 ```text
-pi-extension/index.js  # extension
-tests/smoke.mjs        # small unit smoke
+.tau/runs.jsonl    # measured runs
+.tau/memory.jsonl  # optional short hints
+```
+
+Commit `.tau/` only if you intentionally want to share local Tau data. Most projects should ignore it.
+
+## Safety
+
+Project memories are treated as untrusted data. Tau redacts common prompt-injection phrases and tells the model not to follow instructions inside memory rows.
+
+Run history is strict JSONL. If `.tau/runs.jsonl` is corrupt, Tau fails loudly instead of learning from partial data. Memory JSONL is tolerant, so one bad memory row does not break Pi.
+
+## Development
+
+```bash
+npm test
+npm run check
+```
+
+Files:
+
+```text
+pi-extension/index.js  # Pi extension
+tests/smoke.mjs        # no-dependency smoke tests
 package.json           # Pi package metadata
 ```
 
-No Python. No external service. No model config. Pi handles the model.
-
-Requires Node 18+ through Pi.
+Keep Tau small. Add features only when they improve measured token use, elapsed time, tool count, or local developer ergonomics.
