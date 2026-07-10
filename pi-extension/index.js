@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 const TAU_DIR = ".tau";
@@ -7,7 +8,9 @@ const MEMORIES = "memory.jsonl";
 const SESSIONS = "session.jsonl";
 const FEEDBACK = "feedback.jsonl";
 const ATTEMPTS = "attempts.jsonl";
+const GLOBAL_RUNS = "global-runs.jsonl";
 const MAX_READ_LINES = 240;
+const GLOBAL_MIN_SAMPLES = 3;
 
 function schema(properties = {}) {
   return { type: "object", properties, additionalProperties: false };
@@ -31,6 +34,10 @@ function tauDir(cwd) {
   return join(cwd, TAU_DIR);
 }
 
+function globalTauDir() {
+  return process.env.TAU_HOME || join(homedir(), TAU_DIR);
+}
+
 function appendJsonl(cwd, file, row) {
   mkdirSync(tauDir(cwd), { recursive: true });
   writeFileSync(join(tauDir(cwd), file), `${JSON.stringify(row)}\n`, { flag: "a" });
@@ -43,6 +50,26 @@ function readJsonl(cwd, file) {
     .split("\n")
     .filter(Boolean)
     .map((line) => JSON.parse(line));
+}
+
+function readGlobalRuns() {
+  const path = join(globalTauDir(), GLOBAL_RUNS);
+  if (!existsSync(path)) return [];
+  return readFileSync(path, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    });
+}
+
+function appendGlobalRun(run) {
+  mkdirSync(globalTauDir(), { recursive: true });
+  writeFileSync(join(globalTauDir(), GLOBAL_RUNS), `${JSON.stringify({ ...run, policyScope: run.policyScope || "default" })}\n`, { flag: "a" });
 }
 
 function readMemoryJsonl(cwd) {
@@ -67,6 +94,16 @@ function bucketFromPrompt(prompt) {
     .filter((word) => word.length > 2)
     .slice(0, 3);
   return words.join("-") || "general";
+}
+
+function taskKind(prompt) {
+  const text = String(prompt || "").toLowerCase();
+  if (ambiguityReason(prompt)) return "ambiguous";
+  if (/\b(fix|bug|error|fail|debug|regression)\b/.test(text)) return "code-fix";
+  if (/\b(test|validate|verify|assert)\b/.test(text)) return "verification";
+  if (/\b(add|implement|build|create|write)\b/.test(text)) return "implementation";
+  if (/\b(read-only|inspect|review|determine|explain|where|why)\b/.test(text)) return "inspection";
+  return isSimplePrompt(prompt) ? "simple" : "other";
 }
 
 function promptHash(prompt) {
@@ -126,6 +163,24 @@ function modeFor(cwd, bucket) {
   return "current";
 }
 
+function globalModeFor(kind, scope = "default") {
+  const rows = validRuns(readGlobalRuns()).filter((row) => row.taskKind === kind && row.policyScope === scope);
+  const current = rows.filter((row) => row.mode === "current");
+  const candidate = rows.filter((row) => row.mode === "candidate" && Number(row.memoryLimit || 0) === 0);
+  if (current.length < GLOBAL_MIN_SAMPLES || candidate.length < GLOBAL_MIN_SAMPLES) return "current";
+  const currentTokens = median(current.map((row) => row.totalTokens)) ?? Infinity;
+  const candidateTokens = median(candidate.map((row) => row.totalTokens)) ?? Infinity;
+  const currentElapsed = median(current.map((row) => row.elapsedMs)) ?? Infinity;
+  const candidateElapsed = median(candidate.map((row) => row.elapsedMs)) ?? Infinity;
+  return candidateTokens <= currentTokens && candidateElapsed <= currentElapsed ? "candidate" : "current";
+}
+
+function modeForInstruction(cwd, bucket, kind, scope) {
+  const localRows = validRuns(readJsonl(cwd, RUNS)).filter((row) => row.bucket === bucket);
+  if (localRows.length) return { mode: modeFor(cwd, bucket), modeSource: "project" };
+  return { mode: globalModeFor(kind, scope), modeSource: "global" };
+}
+
 function validRuns(rows) {
   return rows.filter((row) =>
     Number(row.totalTokens) > 0 &&
@@ -170,11 +225,14 @@ function bestMemoryLimit(rows, limits = [0, 1, 3]) {
   }).limit;
 }
 
-function instruction(cwd, prompt, lesson = "") {
+function instruction(cwd, prompt, lesson = "", scope = "default") {
   const bucket = bucketFromPrompt(prompt);
   const hash = promptHash(prompt);
   const simple = isSimplePrompt(prompt);
-  const mode = needsMemoryExploration(cwd, hash, simple) ? "candidate" : modeFor(cwd, bucket);
+  const kind = taskKind(prompt);
+  const selected = modeForInstruction(cwd, bucket, kind, scope);
+  const mode = needsMemoryExploration(cwd, hash, simple) ? "candidate" : selected.mode;
+  const modeSource = needsMemoryExploration(cwd, hash, simple) ? "project-memory" : selected.modeSource;
   const maxFiles = mode === "candidate" ? 8 : 16;
   const repeats = repeatCount(cwd, hash);
   const memoryLimit = memoryLimitFor(cwd, hash, mode, simple);
@@ -182,15 +240,17 @@ function instruction(cwd, prompt, lesson = "") {
   const ambiguity = ambiguityReason(prompt);
   return {
     bucket,
+    taskKind: kind,
     promptHash: hash,
     mode,
+    modeSource,
     simple,
     repeats,
     memoryLimit,
     ambiguity,
     text: [
       "Tau is active silently.",
-      `bucket=${bucket}; mode=${mode}; repeats=${repeats}; max_files=${maxFiles}; memory_k=${memoryLimit}.`,
+      `kind=${kind}; mode=${mode}; source=${modeSource}; repeats=${repeats}; max_files=${maxFiles}; memory_k=${memoryLimit}.`,
       simple && mode === "candidate" ? "Answer directly without tools." : "",
       repeatGuidance(repeats),
       memories.length ? memoryPrompt(memories) : "",
@@ -247,7 +307,7 @@ function ambiguityGuidance(reason) {
   return `Task ambiguous: ${reason}. Do not inspect files or propose commands. Ask one concise clarification for target and acceptance criteria, then wait.`;
 }
 
-function status(cwd) {
+function status(cwd, scope = "default") {
   const runs = readJsonl(cwd, RUNS);
   const memories = readMemoryJsonl(cwd);
   const sessions = readJsonl(cwd, SESSIONS);
@@ -256,11 +316,21 @@ function status(cwd) {
     cwd,
     runs: runs.length,
     attempts: attemptStats(cwd),
+    global: globalStatus(scope),
     memories: memories.length,
     sessionTurns: sessions.length,
     ambiguity: ambiguityStats(cwd),
     lastBucket: last?.bucket || null,
     lastMode: last?.mode || null,
+  };
+}
+
+function globalStatus(scope = "default") {
+  const rows = validRuns(readGlobalRuns()).filter((row) => row.policyScope === scope);
+  const kinds = [...new Set(rows.map((row) => row.taskKind))];
+  return {
+    runs: rows.length,
+    taskKinds: Object.fromEntries(kinds.map((kind) => [kind, globalModeFor(kind, scope)])),
   };
 }
 
@@ -312,6 +382,10 @@ function liveLesson(toolName) {
 
 function toolCallKey(event) {
   return `${event.toolName}:${JSON.stringify(event.input || {})}`;
+}
+
+function policyScope(ctx) {
+  return process.env.TAU_POLICY_SCOPE || `${ctx?.model?.provider || "unknown"}/${ctx?.model?.id || "unknown"}`;
 }
 
 function needsRuntimeProof(prompt) {
@@ -381,8 +455,11 @@ function finishActiveRun(key) {
   const run = {
     ts: new Date().toISOString(),
     bucket: active.bucket,
+    taskKind: active.taskKind,
+    policyScope: active.policyScope,
     promptHash: active.promptHash,
     mode: active.mode,
+    modeSource: active.modeSource,
     repeats: active.repeats,
     memoryLimit: active.memoryLimit,
     elapsedMs: Date.now() - active.startedAt,
@@ -393,6 +470,17 @@ function finishActiveRun(key) {
     readCaps: active.readCaps,
   };
   appendJsonl(active.cwd, RUNS, run);
+  appendGlobalRun({
+    ts: run.ts,
+    taskKind: run.taskKind,
+    policyScope: run.policyScope,
+    mode: run.mode,
+    memoryLimit: run.memoryLimit,
+    totalTokens: run.totalTokens,
+    elapsedMs: run.elapsedMs,
+    tools: run.tools,
+    readCaps: run.readCaps,
+  });
   appendJsonl(active.cwd, ATTEMPTS, {
     ts: run.ts,
     attemptId: active.attemptId,
@@ -418,8 +506,9 @@ export default function tau(pi) {
     activeRuns.delete(key);
     const id = sessionId(ctx);
     const prompt = event.prompt || "";
+    const scope = policyScope(ctx);
     const previous = lastSessionEntry(cwd, id);
-    const next = instruction(cwd, prompt, sessionLesson(cwd, id));
+    const next = instruction(cwd, prompt, sessionLesson(cwd, id), scope);
     if (previous?.ambiguous) {
       appendJsonl(cwd, FEEDBACK, {
         ts: new Date().toISOString(),
@@ -433,8 +522,11 @@ export default function tau(pi) {
       cwd,
       sessionId: id,
       bucket: next.bucket,
+      taskKind: next.taskKind,
+      policyScope: scope,
       promptHash: next.promptHash,
       mode: next.mode,
+      modeSource: next.modeSource,
       repeats: next.repeats,
       memoryLimit: next.memoryLimit,
       ambiguity: next.ambiguity,
@@ -520,7 +612,7 @@ export default function tau(pi) {
     parameters: schema({ cwd: optionalString() }),
     async execute(_id, params, _signal, _update, ctx) {
       const cwd = params.cwd || ctx.cwd || process.cwd();
-      return textResult(JSON.stringify(status(cwd), null, 2));
+      return textResult(JSON.stringify(status(cwd, policyScope(ctx)), null, 2));
     },
   });
 
@@ -565,8 +657,8 @@ export default function tau(pi) {
       const cwd = ctx.cwd || process.cwd();
       const body = [
         "Tau minimal auto-learning layer",
-        `runs: ${status(cwd).runs}`,
-        `memories: ${status(cwd).memories}`,
+        `runs: ${status(cwd, policyScope(ctx)).runs}`,
+        `memories: ${status(cwd, policyScope(ctx)).memories}`,
         "tools: TauStatus, TauTrend, TauMemoryAdd, TauMemoryList",
       ].join("\n");
       if (ctx.mode === "print" || ctx.mode === "json") {
@@ -578,4 +670,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, globalModeFor, globalStatus, globalTauDir, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, needsRuntimeProof, needsMemoryExploration, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, taskKind, tauDir, toolCallKey, trend, validRuns };

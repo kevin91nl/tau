@@ -26,6 +26,14 @@ pi "fix this bug"
 
 Tau is local-only. No daemon. No database. No embeddings. No external service.
 
+## Global Learning
+
+Tau learns project facts only inside that project's `.tau/`. It also writes privacy-minimal policy metrics to `~/.tau/global-runs.jsonl`: task kind, mode, token count, elapsed time, tool count, and read caps. It never writes prompt text, paths, file contents, memories, or tool output there.
+
+After at least three `current` and three `candidate` runs for a task kind, Tau starts a new project in `candidate` mode only when the global candidate median is no worse on both tokens and elapsed time. Metrics are scoped by Pi provider/model. Local evidence always takes precedence after the project has its own runs.
+
+Set `TAU_HOME=/some/local/path` to isolate or reset global learning for an experiment.
+
 ## Requirements
 
 - Pi installed
@@ -76,6 +84,10 @@ Tau writes only inside the current project:
 .tau/attempts.jsonl # started/finished run journal; exposes interrupted runs
 ```
 
+```text
+~/.tau/global-runs.jsonl # cross-project aggregate policy metrics only
+```
+
 Commit `.tau/` only if you intentionally want to share local Tau data. Most projects should ignore it.
 
 ## Safety
@@ -114,6 +126,7 @@ TAU_PI_BIN="$(command -v pi)" TAU_EVAL_MODEL=qwen3.6-35b-a3b-ud-mlx npm run benc
 ```
 
 Add `TAU_BENCH_REPORT=/tmp/tau-bench.json` to retain the JSON measurement.
+Set one shared `TAU_HOME` across separate benchmark processes to prove cross-project learning.
 
 Files:
 

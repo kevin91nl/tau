@@ -12,6 +12,7 @@ const pi = process.env.TAU_PI_BIN || "pi";
 const provider = process.env.TAU_EVAL_PROVIDER || "lmstudio";
 const model = process.env.TAU_EVAL_MODEL || "qwen3.6-35b-a3b-ud-mlx";
 const timeout = Number(process.env.TAU_EVAL_TIMEOUT_MS || 180000);
+const env = { ...process.env, TAU_HOME: process.env.TAU_HOME || join(dir, "tau-home") };
 
 function run(sessionId, prompt, tools = "") {
   const args = [
@@ -26,7 +27,7 @@ function run(sessionId, prompt, tools = "") {
   if (tools) args.push("--tools", tools);
   else args.push("--no-tools");
   args.push("-p", prompt);
-  const result = spawnSync(pi, args, { cwd: dir, encoding: "utf8", timeout, env: process.env });
+  const result = spawnSync(pi, args, { cwd: dir, encoding: "utf8", timeout, env });
   if (result.error) throw result.error;
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return result.stdout.trim();
