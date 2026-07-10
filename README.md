@@ -124,7 +124,7 @@ TAU_PI_BIN="$(command -v pi)" TAU_EVAL_MODEL=qwen3.6-35b-a3b-ud-mlx npm run eval
 
 Set `TAU_EVAL_TIMEOUT_MS` when local model latency needs a larger per-turn budget.
 
-Benchmark repeated, sealed work separately. Every run must make the exact edit; output reports observed current/candidate token, elapsed-time, and tool medians. It reports measurements, never a promised improvement.
+Benchmark repeated, sealed work separately. It uses Pi RPC and waits for `agent_settled`; every run must make the exact edit. Output reports observed current/candidate token, elapsed-time, and tool medians. It reports measurements, never a promised improvement.
 
 ```bash
 TAU_PI_BIN="$(command -v pi)" TAU_EVAL_MODEL=qwen3.6-35b-a3b-ud-mlx npm run bench:local
