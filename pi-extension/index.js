@@ -493,6 +493,12 @@ function sourcePath(input) {
   return /\.[a-z0-9]+$/i.test(path) ? path.slice(0, 180) : "";
 }
 
+function sourcePathsFromCommand(command) {
+  return [...String(command || "").matchAll(/(?:^|\s)((?:\.\.?\/)?[\w./-]+\.[a-z0-9]{1,6})(?=$|\s|:)/gi)]
+    .map((match) => sourcePath({ path: match[1] }))
+    .filter(Boolean);
+}
+
 function bashSearchTerms(prompt) {
   const ignored = new Set(["acceptance", "add", "and", "bug", "code", "defect", "find", "fix", "for", "from", "only", "scope", "test", "tests", "the", "this", "with"]);
   return String(prompt || "").toLowerCase().match(/[a-z][a-z0-9_-]{2,}/g)?.filter((word) => !ignored.has(word)).slice(0, 3) || ["todo"];
@@ -732,6 +738,9 @@ export default function tau(pi) {
     const active = activeRuns.get(runKey(ctx));
     const path = sourcePath(event.input);
     if (active && path) active.files.add(path);
+    if (active && event.toolName === "bash") {
+      for (const source of sourcePathsFromCommand(event.input?.command)) active.files.add(source);
+    }
     if (event.toolName === "read") {
       const requested = Number(event.input?.limit);
       if (!Number.isFinite(requested) || requested <= 0 || requested > MAX_READ_LINES) {
@@ -820,4 +829,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
