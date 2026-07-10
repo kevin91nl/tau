@@ -10,10 +10,12 @@
   },
   "scripts": {
     "test": "node tests/smoke.mjs",
+    "eval:local": "node scripts/local-eval.mjs",
     "check": "npm test && npm pack --dry-run"
   },
   "files": [
     "pi-extension",
+    "scripts",
     "README.md"
   ],
   "keywords": [

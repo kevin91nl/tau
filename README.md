@@ -84,6 +84,8 @@ Live session learning stores only tool names and error state. It never injects r
 
 Ambiguity feedback stores no prompt text. Tau records whether the next turn resolved missing scope and a coarse positive, negative, or unknown reply signal.
 
+When a tool fails, Tau prefixes the final answer with a verification warning. Runtime claims also receive an evidence warning: only literal tool output is verified.
+
 Run history is strict JSONL. If `.tau/runs.jsonl` is corrupt, Tau fails loudly instead of learning from partial data. Memory JSONL is tolerant, so one bad memory row does not break Pi.
 
 ## Development
@@ -91,6 +93,12 @@ Run history is strict JSONL. If `.tau/runs.jsonl` is corrupt, Tau fails loudly i
 ```bash
 npm test
 npm run check
+```
+
+Run local-model evaluation separately. It creates a temporary project and checks ambiguity handling, concrete scope, and live tool-failure learning.
+
+```bash
+TAU_PI_BIN="$(command -v pi)" TAU_EVAL_MODEL=qwen3.6-35b-a3b-ud-mlx npm run eval:local
 ```
 
 Files:

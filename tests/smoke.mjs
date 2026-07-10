@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, bestMemoryLimit, bucketFromPrompt, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 try {
@@ -29,9 +29,13 @@ try {
   assert.equal(feedbackOutcome("Perfect, this works"), "positive");
   assert.equal(feedbackOutcome("Nee, dit werkt niet"), "negative");
   assert.equal(feedbackOutcome("Acceptance: no blocked jobs remain"), "unknown");
+  assert.equal(needsRuntimeProof("Does this raise TypeError?"), true);
+  assert.match(evidenceFooter(), /cannot verify/);
+  assert.match(failureFooter(), /tools failed/);
   const first = instruction(dir, "Fix failing test now");
   assert.equal(first.mode, "current");
   assert.match(first.text, /Before tools, assess scope/);
+  assert.match(first.text, /Do not infer library defaults, exception types/);
   assert.deepEqual(trend(dir), {});
   mkdirSync(join(dir, ".tau"), { recursive: true });
   appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "fix-failing-test", mode: "current", totalTokens: 100, elapsedMs: 1000, tools: 2 }) + "\n");
@@ -143,6 +147,17 @@ try {
   const continued = handlers.before_agent_start({ prompt: "Continue", systemPrompt: "base" }, liveCtx);
   assert.match(continued.systemPrompt, /Same session last turn/);
   handlers.agent_end({}, liveCtx);
+  const evidenceCtx = { cwd: dir, sessionManager: { getSessionId() { return "evidence"; } } };
+  handlers.before_agent_start({ prompt: "Does NaN raise TypeError?", systemPrompt: "base" }, evidenceCtx);
+  const guarded = handlers.message_end({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "It raises." }] } }, evidenceCtx);
+  assert.match(guarded.message.content.at(-1).text, /Evidence guard/);
+  handlers.agent_end({}, evidenceCtx);
+  const failedCtx = { cwd: dir, sessionManager: { getSessionId() { return "failed"; } } };
+  handlers.before_agent_start({ prompt: "Fix tests/live failure", systemPrompt: "base" }, failedCtx);
+  handlers.tool_result({ toolName: "bash", isError: true }, failedCtx);
+  const failed = handlers.message_end({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Tests passed." }] } }, failedCtx);
+  assert.match(failed.message.content[0].text, /Verification guard/);
+  handlers.agent_end({}, failedCtx);
   const ambiguousCtx = { cwd: dir, sessionManager: { getSessionId() { return "ambiguous"; } } };
   const ambiguous = handlers.before_agent_start({ prompt: "Fix it.", systemPrompt: "base" }, ambiguousCtx);
   assert.match(ambiguous.systemPrompt, /Task ambiguous/);

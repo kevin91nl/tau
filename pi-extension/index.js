@@ -195,6 +195,7 @@ function instruction(cwd, prompt, lesson = "") {
       ambiguityGuidance(ambiguity),
       lesson,
       "Before tools, assess scope. If target or observable acceptance criteria are missing, ask one concise clarification and wait; do not inspect first.",
+      "For technical conclusions, state only facts proven by files or tool output. Do not infer library defaults, exception types, or test coverage; mark unsupported behavior unverified without speculation.",
       "Keep context small. Read only files needed. Prefer targeted grep/read over broad scans.",
       "Do not mention Tau unless the user asks.",
     ].filter(Boolean).join(" "),
@@ -293,6 +294,28 @@ function liveLesson(toolName) {
   return `Tau live lesson: ${toolName} failed. Read its error; do not repeat unchanged.`;
 }
 
+function needsRuntimeProof(prompt) {
+  const text = String(prompt || "").toLowerCase();
+  return /\b(raise|raises|reject|exception|runtime|behavior|behaviour)\b/.test(text);
+}
+
+function evidenceFooter() {
+  return "Evidence guard: Tau cannot verify that executed commands cover every runtime claim. Treat any claim not printed by tool output as unverified.";
+}
+
+function failureFooter() {
+  return "Verification guard: one or more tools failed. Do not claim validation succeeded until the failed command is rerun successfully.";
+}
+
+function withFooter(message, footer, prefix = false) {
+  if (!Array.isArray(message.content)) return undefined;
+  const guard = { type: "text", text: `\n\n${footer}` };
+  return {
+    ...message,
+    content: prefix ? [guard, ...message.content] : [...message.content, guard],
+  };
+}
+
 function recentMemories(cwd, limit = 3) {
   return readMemoryJsonl(cwd)
     .map((row) => safeMemoryText(row.text))
@@ -363,6 +386,7 @@ export default function tau(pi) {
       tools: 0,
       errors: [],
       steeredErrors: new Set(),
+      requiresRuntimeProof: needsRuntimeProof(prompt),
     });
     return { systemPrompt: `${event.systemPrompt}\n\n<tau>\n${next.text}\n</tau>` };
   });
@@ -370,9 +394,18 @@ export default function tau(pi) {
   pi.on("message_end", (event, ctx) => {
     const msg = event.message;
     const active = activeRuns.get(runKey(ctx));
-    if (!active || msg?.role !== "assistant" || !msg?.usage) return;
-    active.inputTokens += Number(msg.usage.input || 0);
-    active.outputTokens += Number(msg.usage.output || 0);
+    if (!active || msg?.role !== "assistant") return;
+    if (msg.usage) {
+      active.inputTokens += Number(msg.usage.input || 0);
+      active.outputTokens += Number(msg.usage.output || 0);
+    }
+    if (msg.stopReason !== "stop") return;
+    if (active.errors.length) {
+      return { message: withFooter(msg, failureFooter(), true) };
+    }
+    if (active.requiresRuntimeProof) {
+      return { message: withFooter(msg, evidenceFooter()) };
+    }
   });
 
   pi.on("tool_result", (event, ctx) => {
@@ -482,4 +515,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, bestMemoryLimit, bucketFromPrompt, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, instruction, isSimplePrompt, listedMemories, liveLesson, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, status, tauDir, trend, validRuns };
