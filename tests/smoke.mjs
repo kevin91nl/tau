@@ -26,6 +26,7 @@ try {
   assert.equal(bashOutputFailed([{ type: "text", text: "/bin/bash: .venv/bin/python: No such file or directory" }]), true);
   assert.equal(bashOutputFailed([{ type: "text", text: "1 passed" }]), false);
   assert.equal(isFocusedTestDiscovery({ toolName: "bash", input: { command: "rg -n dedupe tests" } }), true);
+  assert.equal(isFocusedTestDiscovery({ toolName: "read", input: { path: "tests/unit/test_dedupe.py" } }), true);
   assert.equal(promptHash("same"), promptHash("same"));
   assert.equal(repeatGuidance(0), "");
   assert.match(repeatGuidance(2), /no extra checks/);

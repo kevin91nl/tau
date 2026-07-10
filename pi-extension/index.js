@@ -469,6 +469,7 @@ function isExplorationCall(event) {
 }
 
 function isFocusedTestDiscovery(event) {
+  if (event.toolName === "read") return /(^|\/)tests?\//.test(String(event.input?.path || ""));
   const command = String(event.input?.command || "");
   return event.toolName === "bash" && /\b(?:find|grep|rg)\b/.test(command) && /\btests?\b/.test(command);
 }
