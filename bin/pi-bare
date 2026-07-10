@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+TAU_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PI_CODING_AGENT_DIR="$TAU_ROOT/pi-bare-agent"
+exec pi \
+  --offline \
+  --no-extensions \
+  --no-skills \
+  --no-prompt-templates \
+  --no-context-files \
+  --no-session \
+  --provider lmstudio \
+  --model qwen/qwen3.6-35b-a3b-ud-mlx \
+  "$@"

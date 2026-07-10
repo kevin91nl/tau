@@ -1,0 +1,41 @@
+{
+  "name": "tau",
+  "version": "0.1.0",
+  "description": "Tau: local self-improvement harness for Pi.",
+  "type": "module",
+  "main": "pi-extension/index.ts",
+  "files": [
+    "pi-extension",
+    "tau_core",
+    "tau_cli",
+    "tests",
+    "bin",
+    "pi-bare-agent",
+    "README.md",
+    "PLAN.md",
+    "SELFTEST.md",
+    "pyproject.toml"
+  ],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "tau",
+    "local-ai",
+    "self-improving-harness",
+    "lm-studio"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kevin91nl/tau.git"
+  },
+  "pi": {
+    "extensions": [
+      "./pi-extension/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}
