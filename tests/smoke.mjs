@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bashOutputFailed, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isFocusedTestDiscovery, isSimplePrompt, isTrainableRun, isVerificationCommand, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryLimitsFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, observedSymbols, parallelOneInstance, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, unverifiedSymbolFooter, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -23,6 +23,9 @@ try {
   assert.equal(isVerificationCommand("npm test"), true);
   assert.equal(isVerificationCommand("node --test"), true);
   assert.equal(isVerificationCommand("sed -n '1,20p' app.js"), false);
+  assert.equal(bashOutputFailed([{ type: "text", text: "/bin/bash: .venv/bin/python: No such file or directory" }]), true);
+  assert.equal(bashOutputFailed([{ type: "text", text: "1 passed" }]), false);
+  assert.equal(isFocusedTestDiscovery({ toolName: "bash", input: { command: "rg -n dedupe tests" } }), true);
   assert.equal(promptHash("same"), promptHash("same"));
   assert.equal(repeatGuidance(0), "");
   assert.match(repeatGuidance(2), /no extra checks/);
@@ -243,6 +246,8 @@ try {
   handlers.tool_result({ toolName: "read", isError: false, content: [{ type: "text", text: "def item_is_open(x):\n return x not in open_statuses" }] }, invariantCtx);
   assert.equal(sent.at(-1).message.customType, "tau.invariant");
   assert.equal(handlers.tool_call({ toolName: "read", input: { path: "other.py" } }, invariantCtx).block, true);
+  handlers.tool_result({ toolName: "edit", isError: false }, invariantCtx);
+  assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "rg -n dedupe tests" } }, invariantCtx), undefined);
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 } } }, invariantCtx);
   handlers.agent_end({}, invariantCtx);
   const focusCtx = { cwd: dir, sessionManager: { getSessionId() { return "focus"; } } };
