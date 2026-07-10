@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -45,6 +45,15 @@ try {
   assert.equal(narrowBashCommand("pytest tests/unit/test_app.py", "Fix app"), "");
   assert.deepEqual(sourcePathsFromCommand("sed -n '1,80p' src/runtime/dedupe.py tests/test_dedupe.py"), ["src/runtime/dedupe.py", "tests/test_dedupe.py"]);
   assert.match(focusLesson(new Set(["src/a.py"])), /enough exploration/);
+  const compactedMessages = compactContextMessages([
+    { role: "toolResult", content: [{ type: "text", text: "old" }] },
+    { role: "assistant", content: [] },
+    { role: "toolResult", content: [{ type: "text", text: "middle" }] },
+    { role: "toolResult", content: [{ type: "text", text: "new-1" }] },
+    { role: "toolResult", content: [{ type: "text", text: "new-2" }] },
+  ]);
+  assert.match(compactedMessages[0].content[0].text, /compacted/);
+  assert.equal(compactedMessages[3].content[0].text, "new-1");
   assert.equal(needsSingleToolMode({ model: { provider: "lmstudio", id: "qwen3.6-35b-a3b-ud-mlx" } }), true);
   assert.equal(needsSingleToolMode({ model: { provider: "lmstudio", id: "other" } }), false);
   const longSystemPrompt = `base rules\n<project_context>\n# Policy\n- Never deploy locally.\n${"filler ".repeat(5_000)}\n</project_context>`;

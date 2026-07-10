@@ -451,6 +451,22 @@ function capToolContent(content, limit = MAX_BASH_OUTPUT_CHARS) {
   return [...capped, { type: "text", text: `\n\n[Tau truncated tool output at ${limit} characters. Use a narrower command or offset.]` }];
 }
 
+function compactContextMessages(messages, keepToolResults = 2) {
+  const indexes = messages
+    .map((message, index) => message?.role === "toolResult" ? index : -1)
+    .filter((index) => index >= 0);
+  const stale = indexes.slice(0, -keepToolResults);
+  if (!stale.length) return undefined;
+  const staleSet = new Set(stale);
+  return messages.map((message, index) => {
+    if (!staleSet.has(index)) return message;
+    return {
+      ...message,
+      content: [{ type: "text", text: "[Tau compacted an earlier tool result. Reuse later evidence; do not repeat this call.]" }],
+    };
+  });
+}
+
 function policyScope(ctx) {
   return process.env.TAU_POLICY_SCOPE || `${ctx?.model?.provider || "unknown"}/${ctx?.model?.id || "unknown"}`;
 }
@@ -584,6 +600,7 @@ function finishActiveRun(key) {
     tools: active.tools,
     readCaps: active.readCaps,
     outputCaps: active.outputCaps,
+    contextPrunes: active.contextPrunes,
   };
   appendJsonl(active.cwd, RUNS, run);
   appendGlobalRun({
@@ -611,6 +628,7 @@ function finishActiveRun(key) {
     sessionId: active.sessionId,
     tools: active.tools,
     outputCaps: active.outputCaps,
+    contextPrunes: active.contextPrunes,
     readCaps: active.readCaps,
     errors: active.errors,
     ambiguous: Boolean(active.ambiguity),
@@ -633,6 +651,7 @@ function interruptActiveRun(key) {
     sessionId: active.sessionId,
     tools: active.tools,
     outputCaps: active.outputCaps,
+    contextPrunes: active.contextPrunes,
     readCaps: active.readCaps,
     errors: active.errors,
     ambiguous: Boolean(active.ambiguity),
@@ -681,6 +700,7 @@ export default function tau(pi) {
       tools: 0,
       readCaps: 0,
       outputCaps: 0,
+      contextPrunes: 0,
       errors: [],
       steeredErrors: new Set(),
       focusSteered: false,
@@ -719,6 +739,14 @@ export default function tau(pi) {
     if (active.requiresRuntimeProof) {
       return { message: withFooter(msg, evidenceFooter()) };
     }
+  });
+
+  pi.on("context", (event, ctx) => {
+    const compacted = compactContextMessages(event.messages);
+    if (!compacted) return;
+    const active = activeRuns.get(runKey(ctx));
+    if (active) active.contextPrunes += 1;
+    return { messages: compacted };
   });
 
   pi.on("tool_result", (event, ctx) => {
@@ -839,4 +867,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
