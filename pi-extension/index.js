@@ -390,7 +390,7 @@ function policyScope(ctx) {
 
 function needsRuntimeProof(prompt) {
   const text = String(prompt || "").toLowerCase();
-  return /\b(raise|raises|exception|runtime|behavior|behaviour)\b/.test(text);
+  return /\b(raise|raises|exception)\b|\b(?:at|during) runtime\b|\bruntime (?:behavior|behaviour|error)\b/.test(text);
 }
 
 function evidenceFooter() {
@@ -462,7 +462,7 @@ function finishActiveRun(key) {
     modeSource: active.modeSource,
     repeats: active.repeats,
     memoryLimit: active.memoryLimit,
-    elapsedMs: Date.now() - active.startedAt,
+    elapsedMs: Math.max(1, Date.now() - active.startedAt),
     inputTokens: active.inputTokens,
     outputTokens: active.outputTokens,
     totalTokens: active.inputTokens + active.outputTokens,

@@ -26,6 +26,8 @@ pi "fix this bug"
 
 Tau is local-only. No daemon. No database. No embeddings. No external service.
 
+Learning is automatic. Every normally completed Pi task records local metrics and an aggregate global policy row; no slash command, manual memory write, or background model call is needed. Incomplete tasks remain visible in the attempt journal but never train the policy.
+
 ## Global Learning
 
 Tau learns project facts only inside that project's `.tau/`. It also writes privacy-minimal policy metrics to `~/.tau/global-runs.jsonl`: task kind, mode, token count, elapsed time, tool count, and read caps. It never writes prompt text, paths, file contents, memories, or tool output there.

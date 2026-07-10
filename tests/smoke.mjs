@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, globalModeFor, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, evidenceFooter, failureFooter, feedbackOutcome, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -35,6 +35,9 @@ try {
   assert.equal(feedbackOutcome("Acceptance: no blocked jobs remain"), "unknown");
   assert.equal(needsRuntimeProof("Does this raise TypeError?"), true);
   assert.equal(needsRuntimeProof("Does this source reject invalid input?"), false);
+  assert.equal(needsRuntimeProof("Describe terminal-row behavior from source."), false);
+  assert.equal(needsRuntimeProof("Read src/runtime/_dedupe.py."), false);
+  assert.equal(needsRuntimeProof("Does it fail at runtime?"), true);
   assert.match(evidenceFooter(), /cannot verify/);
   assert.match(failureFooter(), /tools failed/);
   const first = instruction(dir, "Fix failing test now");
@@ -138,10 +141,13 @@ try {
   tau(pi);
   const ctx = { cwd: dir };
   appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "reply-exactly", mode: "current", totalTokens: 100, elapsedMs: 1000, tools: 2 }) + "\n");
+  assert.equal(globalStatus("unknown/unknown").runs, 0);
   handlers.before_agent_start({ prompt: "Reply exactly: OK", systemPrompt: "base" }, ctx);
   assert.equal(attemptStats(dir).unfinished, 1);
+  handlers.message_end({ message: { role: "assistant", usage: { input: 10, output: 2 } } }, ctx);
   handlers.agent_end({}, ctx);
   assert.equal(attemptStats(dir).unfinished, 0);
+  assert.equal(globalStatus("unknown/unknown").runs, 1);
   handlers.before_agent_start({ prompt: "Reply exactly: OK", systemPrompt: "base" }, ctx);
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: "OK" }] } }, ctx);
   assert.equal(attemptStats(dir).unfinished, 0);
