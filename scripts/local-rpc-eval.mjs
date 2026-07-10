@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -67,7 +67,7 @@ function rows(file) {
 try {
   writeFileSync(join(dir, "task.js"), 'const status = "draft";\n');
   writeFileSync(join(dir, "task.test.js"), 'import assert from "node:assert/strict";\nimport { readFileSync } from "node:fs";\nassert.match(readFileSync(new URL("./task.js", import.meta.url), "utf8"), /const status = "ready";/);\n');
-  writeFileSync(join(dir, "package.json"), '{"type":"module","scripts":{"test":"node task.test.js"}}\n');
+  writeFileSync(join(dir, "package.json"), '{"type":"module","scripts":{"test":"node --test"}}\n');
   writeFileSync(join(dir, "untouched.txt"), "keep\n");
 
   const rpc = startRpc("read,bash,edit");
@@ -83,11 +83,24 @@ try {
   assert.equal(completed.trainable, true);
   assert.equal(rows("feedback.jsonl").at(-1).resolved, true);
 
+  mkdirSync(join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "src", "normalize.js"), 'export function displayName(record) {\n  return record.profile?.name || "<unknown>";\n}\n');
+  writeFileSync(join(dir, "src", "render.js"), 'import { displayName } from "./normalize.js";\n\nexport function renderImport(record) {\n  return { label: displayName(record) };\n}\n');
+  writeFileSync(join(dir, "src", "import.test.js"), 'import assert from "node:assert/strict";\nimport test from "node:test";\nimport { renderImport } from "./render.js";\n\ntest("renders a normalized import label", () => {\n  assert.equal(renderImport({ profile: { name: " Ada " } }).label, "Ada");\n  assert.equal(renderImport({ profile: { name: "   " } }).label, "<unknown>");\n  assert.equal(renderImport({}).label, "<unknown>");\n});\n');
+
+  const complexRpc = startRpc("read,bash,edit");
+  await complexRpc.prompt("Customer import labels are wrong after a refactor. Find and fix the regression. Acceptance: preserve normalized non-empty names, render `<unknown>` for whitespace-only or missing names, public API unchanged, and `npm test` passes. Do not edit tests.");
+  complexRpc.stop();
+  assert.match(readFileSync(join(dir, "src", "normalize.js"), "utf8"), /\.trim\(\)/);
+  const complexRun = rows("runs.jsonl").at(-1);
+  assert.equal(complexRun.trainable, true);
+
   console.log(JSON.stringify({
     status: "ok",
-    cases: ["vague-clarification", "same-session-clarification-to-sealed-edit"],
+    cases: ["vague-clarification", "same-session-clarification-to-sealed-edit", "multi-file-regression"],
     runs: rows("runs.jsonl").length,
     sealedRun: completed,
+    complexRun,
   }));
 } finally {
   rmSync(dir, { recursive: true, force: true });
