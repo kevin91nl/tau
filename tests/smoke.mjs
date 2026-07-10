@@ -3,11 +3,13 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { bucketFromPrompt, instruction, median, trend } from "../pi-extension/index.js";
+import tau, { bucketFromPrompt, instruction, isSimplePrompt, median, trend } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 try {
   assert.equal(bucketFromPrompt("Fix failing test now"), "fix-failing-test");
+  assert.equal(isSimplePrompt("Reply exactly: OK"), true);
+  assert.equal(isSimplePrompt("fix this bug"), false);
   assert.equal(median([3, 1, 2]), 2);
   const first = instruction(dir, "Fix failing test now");
   assert.equal(first.mode, "current");
@@ -33,13 +35,20 @@ try {
 
   const handlers = {};
   const pi = {
+    tools: ["read", "bash"],
     on(name, handler) { handlers[name] = handler; },
     registerTool() {},
     registerCommand() {},
+    getActiveTools() { return this.tools; },
+    setActiveTools(tools) { this.tools = tools; },
   };
   tau(pi);
   const ctx = { cwd: dir };
+  appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "reply-exactly", mode: "current", totalTokens: 100, elapsedMs: 1000, tools: 2 }) + "\n");
+  handlers.before_agent_start({ prompt: "Reply exactly: OK", systemPrompt: "base" }, ctx);
+  assert.deepEqual(pi.tools, []);
   const start = handlers.before_agent_start({ prompt: "Fix failing test", systemPrompt: "base" }, ctx);
+  assert.deepEqual(pi.tools, ["read", "bash"]);
   assert.match(start.systemPrompt, /<tau>/);
   handlers.message_end({ message: { role: "assistant", usage: { input: 10, output: 2 } } }, ctx);
   handlers.tool_result({}, ctx);

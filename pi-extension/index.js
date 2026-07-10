@@ -93,16 +93,26 @@ function instruction(cwd, prompt) {
   const bucket = bucketFromPrompt(prompt);
   const mode = modeFor(cwd, bucket);
   const maxFiles = mode === "candidate" ? 8 : 16;
+  const simple = isSimplePrompt(prompt);
   return {
     bucket,
     mode,
+    simple,
     text: [
       "Tau is active silently.",
       `bucket=${bucket}; mode=${mode}; max_files=${maxFiles}.`,
+      simple && mode === "candidate" ? "Answer directly without tools." : "",
       "Keep context small. Read only files needed. Prefer targeted grep/read over broad scans.",
       "Do not mention Tau unless the user asks.",
-    ].join(" "),
+    ].filter(Boolean).join(" "),
   };
+}
+
+function isSimplePrompt(prompt) {
+  const text = String(prompt || "").toLowerCase();
+  if (text.includes("reply exactly")) return true;
+  const coding = /\b(fix|bug|test|repo|file|code|edit|implement|debug|build|run)\b/.test(text);
+  return text.length < 120 && !coding;
 }
 
 function status(cwd) {
@@ -123,10 +133,14 @@ function textResult(text, details) {
 }
 
 const activeRuns = new Map();
+let rememberedTools;
 
 export default function tau(pi) {
   pi.on("before_agent_start", (event, ctx) => {
     const cwd = ctx.cwd || process.cwd();
+    if (!rememberedTools && typeof pi.getActiveTools === "function") {
+      rememberedTools = pi.getActiveTools();
+    }
     const next = instruction(cwd, event.prompt || "");
     activeRuns.set(runKey(ctx), {
       cwd,
@@ -137,6 +151,11 @@ export default function tau(pi) {
       outputTokens: 0,
       tools: 0,
     });
+    if (next.simple && next.mode === "candidate" && typeof pi.setActiveTools === "function") {
+      pi.setActiveTools([]);
+    } else if (rememberedTools && typeof pi.setActiveTools === "function") {
+      pi.setActiveTools(rememberedTools);
+    }
     return { systemPrompt: `${event.systemPrompt}\n\n<tau>\n${next.text}\n</tau>` };
   });
 
@@ -236,4 +255,4 @@ export default function tau(pi) {
   });
 }
 
-export { bucketFromPrompt, instruction, median, modeFor, runKey, status, tauDir, trend };
+export { bucketFromPrompt, instruction, isSimplePrompt, median, modeFor, runKey, status, tauDir, trend };
