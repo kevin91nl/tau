@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { bucketFromPrompt, modeFor } from "../pi-extension/index.js";
 
 const root = resolve(import.meta.dirname, "..");
 const extension = join(root, "pi-extension", "index.js");
@@ -92,7 +93,12 @@ try {
   // current runs are therefore expected and are part of the measurement.
   assert.ok(byMode.current.runs >= 1);
   assert.ok(byMode.candidate.runs >= 1);
-  const report = { status: "ok", acceptance: "all sealed edits passed", modes: byMode };
+  const report = {
+    status: "ok",
+    acceptance: "all sealed edits passed",
+    modes: byMode,
+    selectedMode: modeFor(dir, bucketFromPrompt(prompt)),
+  };
   if (process.env.TAU_BENCH_REPORT) {
     writeFileSync(process.env.TAU_BENCH_REPORT, `${JSON.stringify(report, null, 2)}\n`);
   }
