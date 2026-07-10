@@ -253,10 +253,10 @@ try {
   handlers.before_agent_start({ prompt: "Target: runtime predicate. Acceptance: repair it.", systemPrompt: "base" }, invariantCtx);
   handlers.tool_result({ toolName: "read", isError: false, content: [{ type: "text", text: "def item_is_open(x):\n return x not in open_statuses" }] }, invariantCtx);
   assert.equal(sent.at(-1).message.customType, "tau.invariant");
-  assert.equal(handlers.tool_call({ toolName: "read", input: { path: "other.py" } }, invariantCtx).block, true);
+  assert.equal(handlers.tool_call({ toolName: "read", input: { path: "other.py" } }, invariantCtx), undefined);
   assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "rg -n item_is_open tests" } }, invariantCtx), undefined);
   assert.equal(handlers.tool_call({ toolName: "read", input: { path: "tests/unit/test_dedupe.py" } }, invariantCtx), undefined);
-  assert.equal(handlers.tool_call({ toolName: "read", input: { path: "tests/unit/test_more.py" } }, invariantCtx).block, true);
+  assert.equal(handlers.tool_call({ toolName: "read", input: { path: "tests/unit/test_more.py" } }, invariantCtx), undefined);
   handlers.tool_result({ toolName: "edit", isError: false }, invariantCtx);
   assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "rg -n dedupe tests" } }, invariantCtx), undefined);
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 } } }, invariantCtx);
@@ -266,7 +266,7 @@ try {
   handlers.tool_call({ toolName: "read", input: { path: "tests/focus.py" } }, focusCtx);
   for (let i = 0; i < 6; i += 1) handlers.tool_result({ toolName: "bash", isError: false }, focusCtx);
   assert.equal(sent.at(-1).message.customType, "tau.focus");
-  assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "grep -rn x src" } }, focusCtx).block, true);
+  assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "grep -rn x src" } }, focusCtx), undefined);
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 } } }, focusCtx);
   handlers.agent_end({}, focusCtx);
   handlers.before_agent_start({ prompt: "Fix tests/live failure", systemPrompt: "base" }, liveCtx);

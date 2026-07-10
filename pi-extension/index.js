@@ -959,12 +959,9 @@ export default function tau(pi) {
     const directTestRead = Boolean(active && isDirectTestRead(event) && !active.testReadUsed);
     const focusedTestDiscovery = focusedTestSearch || directTestRead;
     const focusedTarget = isFocusedTargetCall(event, active);
-    if (active?.focusSteered && isExplorationCall(event) && !focusedTestDiscovery && !focusedTarget) {
-      return { block: true, reason: "Tau: exploration budget exhausted. Make the smallest justified edit or run a focused test." };
-    }
-    if (active?.actionRequired && isExplorationCall(event) && !focusedTestDiscovery) {
-      return { block: true, reason: "Tau: root cause is proven. Edit the predicate now, then run the focused test; do not inspect more files." };
-    }
+    // Focus and invariants are deliberately advisory. Local models sometimes
+    // need one adjacent source read before a safe edit; exact duplicate calls
+    // are still blocked below.
     if (focusedTestSearch) active.testSearchUsed = true;
     if (directTestRead) active.testReadUsed = true;
     const path = sourcePath(event.input);
