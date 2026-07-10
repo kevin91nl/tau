@@ -82,11 +82,12 @@ function trend(cwd, bucket) {
   const groups = {};
   for (const row of rows) {
     groups[row.bucket] ??= {};
-    groups[row.bucket][row.mode] ??= { runs: 0, tokens: [], elapsed: [], tools: [] };
-    groups[row.bucket][row.mode].runs += 1;
-    groups[row.bucket][row.mode].tokens.push(row.totalTokens || 0);
-    groups[row.bucket][row.mode].elapsed.push(row.elapsedMs || 0);
-    groups[row.bucket][row.mode].tools.push(row.tools || 0);
+    const key = `${row.mode}:memory-${Number(row.memoryLimit || 0)}`;
+    groups[row.bucket][key] ??= { runs: 0, tokens: [], elapsed: [], tools: [] };
+    groups[row.bucket][key].runs += 1;
+    groups[row.bucket][key].tokens.push(row.totalTokens || 0);
+    groups[row.bucket][key].elapsed.push(row.elapsedMs || 0);
+    groups[row.bucket][key].tools.push(row.tools || 0);
   }
   return Object.fromEntries(Object.entries(groups).map(([bucketName, modes]) => {
     const modeStats = Object.fromEntries(Object.entries(modes).map(([mode, value]) => [mode, {
@@ -102,7 +103,8 @@ function trend(cwd, bucket) {
 function modeFor(cwd, bucket) {
   const rows = validRuns(readJsonl(cwd, RUNS)).filter((row) => row.bucket === bucket);
   const current = rows.filter((row) => row.mode === "current");
-  const candidate = rows.filter((row) => row.mode === "candidate");
+  // Memory experiments must not make the minimal candidate look worse.
+  const candidate = rows.filter((row) => row.mode === "candidate" && Number(row.memoryLimit || 0) === 0);
   if (current.length >= 1 && candidate.length >= 1) {
     const currentTokens = median(current.map((row) => row.totalTokens || 0)) ?? Infinity;
     const candidateTokens = median(candidate.map((row) => row.totalTokens || 0)) ?? Infinity;
@@ -124,23 +126,61 @@ function validRuns(rows) {
   );
 }
 
+function memoryLimitFor(cwd, hash, mode, simple) {
+  if (simple || mode !== "candidate" || !recentMemories(cwd, 1).length) return 0;
+  const rows = validRuns(readJsonl(cwd, RUNS)).filter((row) =>
+    row.promptHash === hash && row.mode === "candidate"
+  );
+  const limits = [0, 1, 3];
+  const untried = limits.find((limit) => !rows.some((row) => Number(row.memoryLimit || 0) === limit));
+  if (untried !== undefined) return untried;
+  return bestMemoryLimit(rows, limits);
+}
+
+function needsMemoryExploration(cwd, hash, simple) {
+  if (simple || !recentMemories(cwd, 1).length) return false;
+  const rows = validRuns(readJsonl(cwd, RUNS)).filter((row) =>
+    row.promptHash === hash && row.mode === "candidate"
+  );
+  if (!rows.length) return false;
+  return [0, 1, 3].some((limit) => !rows.some((row) => Number(row.memoryLimit || 0) === limit));
+}
+
+function bestMemoryLimit(rows, limits = [0, 1, 3]) {
+  const stats = limits.map((limit) => {
+    const matches = rows.filter((row) => Number(row.memoryLimit || 0) === limit);
+    return {
+      limit,
+      tokens: median(matches.map((row) => row.totalTokens)),
+      elapsed: median(matches.map((row) => row.elapsedMs)),
+    };
+  }).filter((row) => row.tokens !== null && row.elapsed !== null);
+  return stats.reduce((best, candidate) => {
+    const dominates = candidate.tokens <= best.tokens && candidate.elapsed <= best.elapsed &&
+      (candidate.tokens < best.tokens || candidate.elapsed < best.elapsed);
+    return dominates ? candidate : best;
+  }).limit;
+}
+
 function instruction(cwd, prompt) {
   const bucket = bucketFromPrompt(prompt);
   const hash = promptHash(prompt);
-  const mode = modeFor(cwd, bucket);
-  const maxFiles = mode === "candidate" ? 8 : 16;
   const simple = isSimplePrompt(prompt);
+  const mode = needsMemoryExploration(cwd, hash, simple) ? "candidate" : modeFor(cwd, bucket);
+  const maxFiles = mode === "candidate" ? 8 : 16;
   const repeats = repeatCount(cwd, hash);
-  const memories = simple || mode !== "candidate" ? [] : recentMemories(cwd, 3);
+  const memoryLimit = memoryLimitFor(cwd, hash, mode, simple);
+  const memories = memoryLimit ? recentMemories(cwd, memoryLimit) : [];
   return {
     bucket,
     promptHash: hash,
     mode,
     simple,
     repeats,
+    memoryLimit,
     text: [
       "Tau is active silently.",
-      `bucket=${bucket}; mode=${mode}; repeats=${repeats}; max_files=${maxFiles}.`,
+      `bucket=${bucket}; mode=${mode}; repeats=${repeats}; max_files=${maxFiles}; memory_k=${memoryLimit}.`,
       simple && mode === "candidate" ? "Answer directly without tools." : "",
       repeatGuidance(repeats),
       memories.length ? memoryPrompt(memories) : "",
@@ -233,6 +273,7 @@ export default function tau(pi) {
       promptHash: next.promptHash,
       mode: next.mode,
       repeats: next.repeats,
+      memoryLimit: next.memoryLimit,
       startedAt: Date.now(),
       inputTokens: 0,
       outputTokens: 0,
@@ -265,6 +306,7 @@ export default function tau(pi) {
       promptHash: active.promptHash,
       mode: active.mode,
       repeats: active.repeats,
+      memoryLimit: active.memoryLimit,
       elapsedMs: Date.now() - active.startedAt,
       inputTokens: active.inputTokens,
       outputTokens: active.outputTokens,
@@ -339,4 +381,4 @@ export default function tau(pi) {
   });
 }
 
-export { bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryPrompt, modeFor, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, status, tauDir, trend, validRuns };
+export { bestMemoryLimit, bucketFromPrompt, instruction, isSimplePrompt, listedMemories, median, memoryLimitFor, memoryPrompt, modeFor, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, status, tauDir, trend, validRuns };

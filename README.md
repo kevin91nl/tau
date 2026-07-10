@@ -18,7 +18,7 @@ pi "fix this bug"
 - tries a smaller `candidate` mode after one baseline run
 - keeps the mode with better token/time medians after enough runs
 - stores optional local project memories in `.tau/memory.jsonl`
-- injects at most 3 short memory hints, only for candidate coding runs
+- learns memory count per exact prompt: tests `0`, `1`, then `3` short hints; keeps only a Pareto-better option
 - never mutates Pi's active tool set
 
 Tau is local-only. No daemon. No database. No embeddings. No external service.
@@ -46,7 +46,7 @@ Run Pi twice with a similar prompt, then inspect:
 cat .tau/runs.jsonl
 ```
 
-You should see the first run as `current` and later similar runs as `candidate`. Compare `totalTokens`, `elapsedMs`, and `tools` to verify whether the candidate mode is helping for that task.
+You should see the first run as `current` and later similar runs as `candidate`. Compare exact `promptHash` rows, `totalTokens`, `elapsedMs`, `tools`, and `memoryLimit`. Tau explores only `0`, `1`, `3` memory hints, then retains an option only when it is no worse on both tokens and elapsed time.
 
 ## Commands And Tools
 
