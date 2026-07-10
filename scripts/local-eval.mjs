@@ -11,7 +11,7 @@ const sessionDir = join(dir, "sessions");
 const pi = process.env.TAU_PI_BIN || "pi";
 const provider = process.env.TAU_EVAL_PROVIDER || "lmstudio";
 const model = process.env.TAU_EVAL_MODEL || "qwen3.6-35b-a3b-ud-mlx";
-const timeout = Number(process.env.TAU_EVAL_TIMEOUT_MS || 120000);
+const timeout = Number(process.env.TAU_EVAL_TIMEOUT_MS || 180000);
 
 function run(sessionId, prompt, tools = "") {
   const args = [
@@ -44,20 +44,31 @@ try {
   const vague = run("vague", "Give the platform some love before demo day.");
   assert.match(vague, /\?|clarif|what|which|target/i, vague);
   assert.equal(rows("session.jsonl").at(-1).ambiguous, true);
+  const clarified = run("vague", "Perfect. Target: README.md. Acceptance: add one sentence. Without tools, state whether this is actionable.");
+  assert.match(clarified, /actionable|ready|can/i, clarified);
+  const feedback = rows("feedback.jsonl").at(-1);
+  assert.equal(feedback.sessionId, "vague");
+  assert.equal(feedback.pattern, "ambiguous");
+  assert.equal(feedback.resolved, true);
+  assert.equal(feedback.sentiment, "positive");
 
   const concrete = run("concrete", "Target: README.md. Acceptance: add one sentence. Without tools, state whether this is actionable.");
   assert.match(concrete, /actionable|ready|can/i, concrete);
   assert.equal(rows("session.jsonl").at(-1).ambiguous, false);
 
-  run("failure", "Run false once with bash. Do not repeat it.", "bash");
+  const failureOutput = run("failure", "Run false once with bash. Do not repeat it.", "bash");
+  assert.match(failureOutput, /Verification guard/, failureOutput);
   const failure = rows("session.jsonl").at(-1);
   assert.deepEqual(failure.errors, ["bash"]);
   const followUp = run("failure", "Without tools, should the prior bash command be repeated?");
   assert.match(followUp, /^no\b/i, followUp);
 
+  const runtime = run("runtime", "Does NaN raise TypeError? Do not use tools.");
+  assert.match(runtime, /Evidence guard/, runtime);
+
   console.log(JSON.stringify({
     status: "ok",
-    cases: ["vague-clarification", "concrete-actionability", "live-failure-learning"],
+    cases: ["vague-clarification", "clarification-feedback", "concrete-actionability", "live-failure-learning", "runtime-evidence-guard"],
     runs: rows("runs.jsonl").length,
   }));
 } finally {

@@ -101,6 +101,8 @@ Run local-model evaluation separately. It creates a temporary project and checks
 TAU_PI_BIN="$(command -v pi)" TAU_EVAL_MODEL=qwen3.6-35b-a3b-ud-mlx npm run eval:local
 ```
 
+Set `TAU_EVAL_TIMEOUT_MS` when local model latency needs a larger per-turn budget.
+
 Files:
 
 ```text
