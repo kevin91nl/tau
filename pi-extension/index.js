@@ -803,6 +803,9 @@ export default function tau(pi) {
     if (active?.ambiguity) {
       return { block: true, reason: "Tau: task is ambiguous. Ask one concise clarification for target and acceptance criteria before using tools." };
     }
+    if (active?.focusSteered && isExplorationCall(event)) {
+      return { block: true, reason: "Tau: exploration budget exhausted. Make the smallest justified edit or run a focused test." };
+    }
     const path = sourcePath(event.input);
     if (active && path) active.files.add(path);
     if (active && event.toolName === "bash") {

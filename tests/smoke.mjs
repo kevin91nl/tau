@@ -214,6 +214,7 @@ try {
   handlers.before_agent_start({ prompt: "Fix tests/focus.py failure", systemPrompt: "base" }, focusCtx);
   for (let i = 0; i < 4; i += 1) handlers.tool_result({ toolName: "bash", isError: false }, focusCtx);
   assert.equal(sent.at(-1).message.customType, "tau.focus");
+  assert.equal(handlers.tool_call({ toolName: "bash", input: { command: "grep -rn x src" } }, focusCtx).block, true);
   handlers.message_end({ message: { role: "assistant", stopReason: "stop", usage: { input: 1, output: 1 } } }, focusCtx);
   handlers.agent_end({}, focusCtx);
   handlers.before_agent_start({ prompt: "Fix tests/live failure", systemPrompt: "base" }, liveCtx);
