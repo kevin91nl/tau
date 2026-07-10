@@ -11,10 +11,42 @@ const ATTEMPTS = "attempts.jsonl";
 const GLOBAL_RUNS = "global-runs.jsonl";
 const MAX_READ_LINES = 240;
 const MAX_BASH_OUTPUT_CHARS = 12_000;
+const MAX_SYSTEM_PROMPT_CHARS = 14_000;
 const GLOBAL_MIN_SAMPLES = 3;
 
 function schema(properties = {}) {
   return { type: "object", properties, additionalProperties: false };
+}
+
+function compactLine(line) {
+  const value = String(line || "").trim();
+  return value.length > 240 ? `${value.slice(0, 237)}...` : value;
+}
+
+function compactSystemPrompt(systemPrompt, limit = MAX_SYSTEM_PROMPT_CHARS) {
+  const source = String(systemPrompt || "");
+  if (source.length <= limit) return source;
+  const marker = "<project_context>";
+  const index = source.indexOf(marker);
+  if (index < 0) return source.slice(0, limit);
+  const base = source.slice(0, index);
+  const lines = source.slice(index).split("\n");
+  const selected = [];
+  for (const line of lines) {
+    const value = line.trim();
+    if (!value) continue;
+    if (/^#{1,4}\s|^[-*]\s|^<\/?project_|\b(always|never|must|do not|required|only|deploy|test|commit)\b/i.test(value)) {
+      selected.push(compactLine(value));
+    }
+    if (`${base}\n${selected.join("\n")}`.length >= limit - 260) break;
+  }
+  const capsule = [
+    "<project_context>",
+    "Tau compacted long project instructions for local-model context. Original AGENTS.md remains authoritative; before edits, commits, tests, or deploys, read only its relevant section.",
+    ...selected,
+    "</project_context>",
+  ].join("\n");
+  return `${base}\n${capsule}`.slice(0, limit);
 }
 
 function optionalString() {
@@ -418,6 +450,12 @@ function policyScope(ctx) {
   return process.env.TAU_POLICY_SCOPE || `${ctx?.model?.provider || "unknown"}/${ctx?.model?.id || "unknown"}`;
 }
 
+function needsSingleToolMode(ctx) {
+  const provider = String(ctx?.model?.provider || "").toLowerCase();
+  const model = String(ctx?.model?.id || "").toLowerCase();
+  return provider === "lmstudio" && model.includes("qwen3.6");
+}
+
 function needsRuntimeProof(prompt) {
   const text = String(prompt || "").toLowerCase();
   return /\b(raise|raises|exception)\b|\b(?:at|during) runtime\b|\bruntime (?:behavior|behaviour|error)\b/.test(text);
@@ -592,6 +630,10 @@ function interruptActiveRun(key) {
 }
 
 export default function tau(pi) {
+  pi.on("session_start", (_event, ctx) => {
+    if (needsSingleToolMode(ctx)) pi.setActiveTools(["bash"]);
+  });
+
   pi.on("before_agent_start", (event, ctx) => {
     const cwd = ctx.cwd || process.cwd();
     const key = runKey(ctx);
@@ -645,7 +687,8 @@ export default function tau(pi) {
       mode: next.mode,
       status: "started",
     });
-    return { systemPrompt: `${event.systemPrompt}\n\n<tau>\n${next.text}\n</tau>` };
+    const basePrompt = compactSystemPrompt(event.systemPrompt);
+    return { systemPrompt: `${basePrompt}\n\n<tau>\n${next.text}\n</tau>` };
   });
 
   pi.on("message_end", (event, ctx) => {
@@ -777,4 +820,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, policyScope, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, status, taskKind, tauDir, toolCallKey, trend, validRuns };

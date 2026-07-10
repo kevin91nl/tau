@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, evidenceFooter, failureFooter, feedbackOutcome, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, globalModeFor, globalStatus, instruction, isSimplePrompt, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -43,6 +43,13 @@ try {
   assert.match(narrowBashCommand("find /repo -type f -name '*.py' | head -80", "Fix runtime dedupe defect"), /rg -n -i/);
   assert.equal(narrowBashCommand("cat src/app.py", "Fix app"), "sed -n '1,240p' src/app.py");
   assert.equal(narrowBashCommand("pytest tests/unit/test_app.py", "Fix app"), "");
+  assert.equal(needsSingleToolMode({ model: { provider: "lmstudio", id: "qwen3.6-35b-a3b-ud-mlx" } }), true);
+  assert.equal(needsSingleToolMode({ model: { provider: "lmstudio", id: "other" } }), false);
+  const longSystemPrompt = `base rules\n<project_context>\n# Policy\n- Never deploy locally.\n${"filler ".repeat(5_000)}\n</project_context>`;
+  const compacted = compactSystemPrompt(longSystemPrompt);
+  assert.ok(compacted.length <= MAX_SYSTEM_PROMPT_CHARS);
+  assert.match(compacted, /Never deploy locally/);
+  assert.match(compacted, /Original AGENTS.md remains authoritative/);
   assert.match(evidenceFooter(), /cannot verify/);
   assert.match(failureFooter(), /tools failed/);
   const first = instruction(dir, "Fix failing test now");
@@ -135,15 +142,17 @@ try {
 
   const handlers = {};
   const sent = [];
+  const activeTools = [];
   const pi = {
     on(name, handler) { handlers[name] = handler; },
     registerTool() {},
     registerCommand() {},
     sendMessage(message, options) { sent.push({ message, options }); },
-    getActiveTools() { throw new Error("Tau should not inspect active tools"); },
-    setActiveTools() { throw new Error("Tau should not mutate active tools"); },
+    setActiveTools(names) { activeTools.push(names); },
   };
   tau(pi);
+  handlers.session_start({}, { model: { provider: "lmstudio", id: "qwen3.6-35b-a3b-ud-mlx" } });
+  assert.deepEqual(activeTools, [["bash"]]);
   const ctx = { cwd: dir };
   appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "reply-exactly", mode: "current", totalTokens: 100, elapsedMs: 1000, tools: 2 }) + "\n");
   assert.equal(globalStatus("unknown/unknown").runs, 0);
