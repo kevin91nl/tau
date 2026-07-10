@@ -24,10 +24,12 @@ def read_files(paths: list[Path], max_total_chars: int = 12_000) -> list[dict]:
             raw = p.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue
-        if chars + len(raw) > max_total_chars:
+        remaining = max_total_chars - chars
+        if remaining <= 0:
             break
-        out.append({"path": str(p), "chars": len(raw), "content": raw})
-        chars += len(raw)
+        content = raw[:remaining]
+        out.append({"path": str(p), "chars": len(raw), "included_chars": len(content), "content": content})
+        chars += len(content)
     return out
 
 

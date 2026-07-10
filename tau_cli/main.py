@@ -15,6 +15,7 @@ from tau_core.locate_read import locate_read
 from tau_core.memory import add_card, cards
 from tau_core.memory_pack import pack_memory
 from tau_core.metrics import Timer, record_measurement, summarize_trends
+from tau_core.learning import advise, learn_policy
 from tau_core.proposals import apply_proposal, create_proposal, discard_proposal, latest_proposal
 from tau_core.proposal_check import check_proposal
 from tau_core.resources import preflight
@@ -206,6 +207,65 @@ def cmd_trend(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_learn(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    obj = learn_policy(root, bucket=args.bucket)
+    print(json.dumps(obj, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_advise(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    obj = advise(root, bucket=args.bucket, scope=args.scope)
+    print(json.dumps(obj, indent=2, sort_keys=True))
+    return 0
+
+
+def _bucket_from_prompt(prompt: str) -> str:
+    words = [w.strip(".,:;!?()[]{}").lower() for w in prompt.split()]
+    words = [w for w in words if len(w) > 2][:4]
+    return "-".join(words) or "general"
+
+
+def cmd_auto_start(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    bucket = args.bucket or _bucket_from_prompt(args.prompt)
+    advice = advise(root, bucket=bucket, scope=args.scope)
+    instruction = (
+        "Tau auto-learning layer is active and should stay invisible to the user. "
+        f"Bucket={bucket}; mode={advice['selected_mode']}; context={advice['limits']['context']}; "
+        f"max_files={advice['limits']['max_files']}; max_context_chars={advice['limits']['max_context_chars']}. "
+        "Use compact targeted context. Prefer TauPack/TauLocateRead before broad file reads. "
+        "Minimize tokens and time-to-acceptance. Do not mention Tau unless the user asks. "
+        "After work, Tau will record outcome metrics automatically."
+    )
+    obj = {"bucket": bucket, "instruction": instruction, "advice": advice}
+    append_jsonl(root / ".tau" / "ledger.jsonl", {"event": "auto_start", "bucket": bucket, "mode": advice["selected_mode"]})
+    print(json.dumps(obj, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_auto_end(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    obj = record_measurement(
+        root,
+        bucket=args.bucket,
+        mode=args.mode,
+        accepted=args.accepted,
+        input_tokens=args.input_tokens,
+        output_tokens=args.output_tokens,
+        elapsed_s=args.elapsed_s,
+        time_to_acceptance_s=args.elapsed_s,
+        safety_flags=args.safety_flags,
+    )
+    learned = learn_policy(root, bucket=args.bucket)
+    print(json.dumps({"measurement": obj, "learned": learned["learned"]}, indent=2, sort_keys=True))
+    return 0
+
+
 def cmd_locate_read(args: argparse.Namespace) -> int:
     root = _ensure_root(args)
     cfg = TauConfig(base_url=args.base_url)
@@ -291,6 +351,34 @@ def cmd_eval(args: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def cmd_selftest(args: argparse.Namespace) -> int:
+    root = find_root(Path(args.cwd or os.getcwd()))
+    checks = [
+        ("unit", [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"]),
+        ("doctor", [sys.executable, "-m", "tau_cli.main", "doctor", "--cwd", str(root)]),
+        ("pack", [sys.executable, "-m", "tau_cli.main", "pack", "Reply exactly: TAU_SELFTEST_OK", "--cwd", str(root)]),
+        ("learn", [sys.executable, "-m", "tau_cli.main", "learn", "--bucket", "selftest", "--cwd", str(root)]),
+        ("advise", [sys.executable, "-m", "tau_cli.main", "advise", "--bucket", "selftest", "--cwd", str(root)]),
+    ]
+    if args.with_pi:
+        pi = args.pi_bare or str(root / "bin" / "pi-bare")
+        checks.append(("pi-bare", [pi, "-p", "Reply exactly: TAU_SELFTEST_OK"]))
+    ok = True
+    print("case | status | rc")
+    for name, cmd in checks:
+        proc = subprocess.run(cmd, cwd=root, text=True, capture_output=True, timeout=args.timeout)
+        status = "ok" if proc.returncode == 0 else "fail"
+        print(f"{name} | {status} | {proc.returncode}")
+        if proc.returncode != 0:
+            ok = False
+            if proc.stdout:
+                print(proc.stdout[-2000:])
+            if proc.stderr:
+                print(proc.stderr[-2000:], file=sys.stderr)
+    append_jsonl(root / ".tau" / "ledger.jsonl", {"event": "selftest", "ok": ok})
+    return 0 if ok else 1
+
+
 def _extract_ops(text: str) -> list[dict]:
     start = text.find("TAU_OPS_JSON")
     if start == -1:
@@ -332,9 +420,10 @@ def cmd_improve(args: argparse.Namespace) -> int:
     cwd = Path(args.cwd or os.getcwd())
     root = find_root(cwd)
     prompt = (
-        "You are improving Tau. Return a concise explanation and then a JSON array marked TAU_OPS_JSON. "
+        "You are improving Tau. Return ONLY machine output. First line exactly TAU_OPS_JSON. "
+        "Second line: a JSON array. "
         "Ops schema: [{\"op\":\"write|delete\",\"path\":\"relative\",\"content\":\"...\"}]. "
-        "Only edit Tau project files. Keep stdlib only. Goal: " + args.prompt
+        "Only edit Tau project files. Keep stdlib only. Focus auto-learning, tests, and install quality. Goal: " + args.prompt
     )
     pack_proc = subprocess.run([sys.executable, "-m", "tau_cli.main", "pack", prompt, "--cwd", str(root)], cwd=root, text=True, capture_output=True, check=True)
     pi = args.pi_bare
@@ -370,6 +459,11 @@ def parser() -> argparse.ArgumentParser:
     add_common(sub.add_parser("init"))
     add_common(sub.add_parser("status"))
     add_common(sub.add_parser("eval"))
+    st = sub.add_parser("selftest")
+    add_common(st)
+    st.add_argument("--with-pi", action="store_true")
+    st.add_argument("--pi-bare")
+    st.add_argument("--timeout", type=int, default=180)
     pk = sub.add_parser("pack")
     add_common(pk)
     pk.add_argument("prompt")
@@ -447,6 +541,32 @@ def parser() -> argparse.ArgumentParser:
     trend.add_argument("--bucket")
     trend.add_argument("--json", action="store_true")
 
+    learn = sub.add_parser("learn")
+    add_common(learn)
+    learn.add_argument("--bucket")
+
+    adv = sub.add_parser("advise")
+    add_common(adv)
+    adv.add_argument("--bucket", required=True)
+    adv.add_argument("--scope", default=".")
+
+    auto = sub.add_parser("auto")
+    auto_sub = auto.add_subparsers(dest="auto_cmd", required=True)
+    ast = auto_sub.add_parser("start")
+    add_common(ast)
+    ast.add_argument("prompt")
+    ast.add_argument("--bucket")
+    ast.add_argument("--scope", default=".")
+    aend = auto_sub.add_parser("end")
+    add_common(aend)
+    aend.add_argument("--bucket", required=True)
+    aend.add_argument("--mode", default="current", choices=["baseline", "current", "candidate"])
+    aend.add_argument("--accepted", action="store_true")
+    aend.add_argument("--input-tokens", type=int, default=0)
+    aend.add_argument("--output-tokens", type=int, default=0)
+    aend.add_argument("--elapsed-s", type=float, default=0)
+    aend.add_argument("--safety-flags", type=int, default=0)
+
     # locate-read compound command
     lr = sub.add_parser("locate-read")
     add_common(lr)
@@ -496,8 +616,19 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_status(args)
     if args.cmd == "eval":
         return cmd_eval(args)
+    if args.cmd == "selftest":
+        return cmd_selftest(args)
     if args.cmd == "improve":
         return cmd_improve(args)
+    if args.cmd == "learn":
+        return cmd_learn(args)
+    if args.cmd == "advise":
+        return cmd_advise(args)
+    if args.cmd == "auto":
+        if args.auto_cmd == "start":
+            return cmd_auto_start(args)
+        if args.auto_cmd == "end":
+            return cmd_auto_end(args)
     # memory subcommands
     if args.cmd == "memory":
         if args.mem_cmd == "add":
