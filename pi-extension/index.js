@@ -928,7 +928,7 @@ export default function tau(pi) {
       active.actionRequired = true;
       pi.sendMessage({ customType: "tau.invariant", content: invariant, display: "Tau" }, { deliverAs: "steer" });
     }
-    if (!failed && !active.focusSteered && active.files.size && active.tools >= 4 && (active.taskKind === "code-fix" || active.taskKind === "implementation")) {
+    if (!failed && !active.focusSteered && active.files.size && active.tools >= 6 && (active.taskKind === "code-fix" || active.taskKind === "implementation")) {
       active.focusSteered = true;
       pi.sendMessage({ customType: "tau.focus", content: focusLesson(active.files), display: "Tau" }, { deliverAs: "steer" });
     }
