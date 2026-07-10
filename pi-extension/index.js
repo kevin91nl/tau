@@ -466,7 +466,7 @@ function narrowBashCommand(command, prompt) {
   if (findPrefix) {
     const prefix = findPrefix[1];
     const pattern = bashSearchTerms(prompt).join("|");
-    return `${prefix}rg -n -i --glob '*.{py,js,mjs,ts,tsx}' '${pattern}' src tests`;
+    return `${prefix}rg -n -i --glob '*.{py,js,mjs,ts,tsx}' '${pattern}' src`;
   }
   const cat = value.match(/^(.*?)(?:cat\s+)((?:[^\s;&|]+))\s*$/);
   if (cat) return `${cat[1]}sed -n '1,${MAX_READ_LINES}p' ${cat[2]}`;
