@@ -23,7 +23,6 @@ pi "fix this bug"
 - learns memory count per exact prompt: tests `0`, `1`, then `3` short hints; keeps only a Pareto-better option
 - caps broad Pi file reads at 240 lines; rewrites root-wide `find` and plain `cat` discovery to narrow `rg`/`sed` reads
 - compacts oversized `AGENTS.md` context into a bounded policy capsule for local models; original instructions remain task-readable and authoritative
-- automatically uses one `bash` tool for LM Studio `qwen3.6`, avoiding its multi-tool function-calling failure mode
 - never mutates Pi's active tool set
 
 Tau is local-only. No daemon. No database. No embeddings. No external service.
@@ -31,8 +30,6 @@ Tau is local-only. No daemon. No database. No embeddings. No external service.
 Learning is automatic. Every normally completed Pi task records local metrics, an aggregate global policy row, and, when Pi touched explicit source files, one compact local navigation hint for a later similar task. No slash command, manual memory write, or background model call is needed. Incomplete tasks remain visible in the attempt journal but never train the policy or create a memory.
 
 Tau deliberately does not ask a second model to summarize every turn. That would add latency and tokens before the next user-visible result. It uses deterministic evidence from the completed run instead: task bucket plus up to three explicit source paths. These hints are only injected for the same bucket and only when the measured memory experiment selects them.
-
-For LM Studio `qwen3.6`, Tau switches Pi to one `bash` tool automatically. This model/provider path fails before issuing a request when multiple tool schemas are active. `bash` retains file inspection, editing, and verification while keeping the local tool loop reliable.
 
 ## Global Learning
 

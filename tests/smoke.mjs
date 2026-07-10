@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendFileSync, mkdirSync } from "node:fs";
-import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, normalizeMacSed, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
+import tau, { ambiguityReason, ambiguityStats, appendGlobalRun, attemptStats, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, focusLesson, globalModeFor, globalStatus, instruction, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, median, memoryLimitFor, memoryPrompt, modeFor, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, safeMemoryText, sessionLesson, sourcePathsFromCommand, taskKind, trend, validRuns } from "../pi-extension/index.js";
 
 const dir = mkdtempSync(join(tmpdir(), "tau-smoke-"));
 const priorTauHome = process.env.TAU_HOME;
@@ -63,8 +63,6 @@ try {
   ]);
   assert.match(compactedMessages[0].content[0].text, /compacted/);
   assert.equal(compactedMessages[3].content[0].text, "new-1");
-  assert.equal(needsSingleToolMode({ model: { provider: "lmstudio", id: "qwen3.6-35b-a3b-ud-mlx" } }), true);
-  assert.equal(needsSingleToolMode({ model: { provider: "lmstudio", id: "other" } }), false);
   const longSystemPrompt = `base rules\n<project_context>\n# Policy\n- Never deploy locally.\n${"filler ".repeat(5_000)}\n</project_context>`;
   const compacted = compactSystemPrompt(longSystemPrompt);
   assert.ok(compacted.length <= MAX_SYSTEM_PROMPT_CHARS);
@@ -169,17 +167,13 @@ try {
 
   const handlers = {};
   const sent = [];
-  const activeTools = [];
   const pi = {
     on(name, handler) { handlers[name] = handler; },
     registerTool() {},
     registerCommand() {},
     sendMessage(message, options) { sent.push({ message, options }); },
-    setActiveTools(names) { activeTools.push(names); },
   };
   tau(pi);
-  handlers.session_start({}, { model: { provider: "lmstudio", id: "qwen3.6-35b-a3b-ud-mlx" } });
-  assert.deepEqual(activeTools, [["bash"]]);
   const ctx = { cwd: dir };
   appendFileSync(join(dir, ".tau", "runs.jsonl"), JSON.stringify({ bucket: "reply-exactly", mode: "current", totalTokens: 100, elapsedMs: 1000, tools: 2 }) + "\n");
   assert.equal(globalStatus("unknown/unknown").runs, 0);

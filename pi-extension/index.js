@@ -495,12 +495,6 @@ function policyScope(ctx) {
   return process.env.TAU_POLICY_SCOPE || `${ctx?.model?.provider || "unknown"}/${ctx?.model?.id || "unknown"}`;
 }
 
-function needsSingleToolMode(ctx) {
-  const provider = String(ctx?.model?.provider || "").toLowerCase();
-  const model = String(ctx?.model?.id || "").toLowerCase();
-  return provider === "lmstudio" && model.includes("qwen3.6");
-}
-
 function needsRuntimeProof(prompt) {
   const text = String(prompt || "").toLowerCase();
   return /\b(raise|raises|exception)\b|\b(?:at|during) runtime\b|\bruntime (?:behavior|behaviour|error)\b/.test(text);
@@ -691,10 +685,6 @@ function interruptActiveRun(key) {
 }
 
 export default function tau(pi) {
-  pi.on("session_start", (_event, ctx) => {
-    if (needsSingleToolMode(ctx)) pi.setActiveTools(["bash"]);
-  });
-
   pi.on("before_agent_start", (event, ctx) => {
     const cwd = ctx.cwd || process.cwd();
     const key = runKey(ctx);
@@ -920,4 +910,4 @@ export default function tau(pi) {
   });
 }
 
-export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, needsSingleToolMode, normalizeMacSed, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
+export { ambiguityGuidance, ambiguityReason, ambiguityStats, appendAutoReflection, appendGlobalRun, attemptStats, bashSearchTerms, bestMemoryLimit, bucketFromPrompt, capToolContent, compactContextMessages, compactSystemPrompt, evidenceFooter, failureFooter, feedbackOutcome, finishActiveRun, focusLesson, globalModeFor, globalStatus, globalTauDir, hasIncompleteAttempt, instruction, interruptActiveRun, isExplorationCall, isSimplePrompt, isTrainableRun, listedMemories, liveLesson, MAX_BASH_OUTPUT_CHARS, MAX_READ_LINES, MAX_SYSTEM_PROMPT_CHARS, MAX_TRAINABLE_TOKENS, MAX_TRAINABLE_TOOLS, median, memoryLimitFor, memoryPrompt, modeFor, modeForInstruction, narrowBashCommand, needsRuntimeProof, needsMemoryExploration, normalizeMacSed, policyScope, predicateInvariantLesson, promptHash, recentMemories, repeatCount, repeatGuidance, runKey, safeMemoryText, sessionId, sessionLesson, sourcePath, sourcePathsFromCommand, status, taskKind, tauDir, toolCallKey, trend, validRuns };
