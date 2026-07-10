@@ -74,7 +74,7 @@ try {
   assert.equal(isExplorationCall({ toolName: "bash", input: { command: "pytest tests/test_x.py" } }), false);
   const compactedMessages = compactContextMessages([
     { role: "toolResult", content: [{ type: "text", text: "old" }] },
-    { role: "assistant", content: [] },
+    { role: "assistant", content: [{ type: "thinking", thinking: "old reasoning" }] },
     { role: "toolResult", content: [{ type: "text", text: "middle" }] },
     { role: "toolResult", content: [{ type: "text", text: "new-1" }] },
     { role: "toolResult", content: [{ type: "text", text: "new-2" }] },
@@ -83,6 +83,12 @@ try {
   assert.match(compactedMessages[0].content[0].text, /compacted/);
   assert.match(compactedMessages[1].content[0].text, /assistant reasoning/);
   assert.equal(compactedMessages[3].content[0].text, "new-1");
+  const pairedMessages = compactContextMessages([
+    { role: "assistant", content: [{ type: "thinking", thinking: "old" }, { type: "toolCall", id: "call-1", name: "read", arguments: { path: "a.js" } }] },
+    { role: "assistant", content: [{ type: "text", text: "latest" }] },
+  ]);
+  assert.equal(pairedMessages[0].content[0].type, "toolCall");
+  assert.equal(pairedMessages[0].content[0].id, "call-1");
   const longSystemPrompt = `base rules\n<project_context>\n# Policy\n- Never deploy locally.\n${"filler ".repeat(5_000)}\n</project_context>`;
   const compacted = compactSystemPrompt(longSystemPrompt);
   assert.ok(compacted.length <= MAX_SYSTEM_PROMPT_CHARS);

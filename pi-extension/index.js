@@ -540,9 +540,17 @@ function compactContextMessages(messages, keepToolResults = 2) {
       };
     }
     if (!staleAssistants.has(index)) return message;
+    const retained = Array.isArray(message.content)
+      ? message.content.filter((block) => block?.type !== "thinking")
+      : [];
     return {
       ...message,
-      content: [{ type: "text", text: "[Tau compacted earlier assistant reasoning. Reuse recent tool evidence and the latest turn.]" }],
+      // Keep old tool calls paired with their tool results. Only hidden
+      // reasoning is expendable; replacing the whole message breaks some
+      // provider conversation formats.
+      content: retained.length
+        ? retained
+        : [{ type: "text", text: "[Tau compacted earlier assistant reasoning. Reuse recent tool evidence and the latest turn.]" }],
     };
   });
 }
