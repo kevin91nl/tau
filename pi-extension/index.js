@@ -228,6 +228,7 @@ function validRuns(rows) {
 
 function isTrainableRun(row) {
   return row.trainable !== false &&
+    !row.errors?.length &&
     Number(row.totalTokens) <= MAX_TRAINABLE_TOKENS &&
     Number(row.tools || 0) <= MAX_TRAINABLE_TOOLS;
 }
@@ -617,6 +618,7 @@ function finishActiveRun(key) {
     readCaps: active.readCaps,
     outputCaps: active.outputCaps,
     contextPrunes: active.contextPrunes,
+    errors: active.errors,
   };
   run.trainable = isTrainableRun(run);
   appendJsonl(active.cwd, RUNS, run);

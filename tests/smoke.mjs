@@ -18,6 +18,7 @@ try {
   assert.equal(validRuns([{ mode: "candidate", totalTokens: 0, elapsedMs: 10 }]).length, 0);
   assert.equal(isTrainableRun({ totalTokens: 250_001, tools: 1 }), false);
   assert.equal(isTrainableRun({ totalTokens: 100, tools: 17 }), false);
+  assert.equal(isTrainableRun({ totalTokens: 100, tools: 1, errors: ["bash"] }), false);
   assert.equal(promptHash("same"), promptHash("same"));
   assert.equal(repeatGuidance(0), "");
   assert.match(repeatGuidance(2), /no extra checks/);
