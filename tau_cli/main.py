@@ -23,6 +23,7 @@ from tau_core.proposals import apply_proposal, create_proposal, discard_proposal
 from tau_core.proposal_check import check_proposal
 from tau_core.resources import preflight
 from tau_core.secret_scan import scan_tree as secret_scan_tree
+from tau_core.skills import add_skill, list_skills, promote_skill
 from tau_core.state import append_jsonl, ensure_state, latest_run, run_id, write_json
 from tau_core.trace import event, read_events
 from tau_core.reviewer import scan_diff_file, scan_git_diff, record_roi
@@ -133,6 +134,27 @@ def cmd_memory_promote(args: argparse.Namespace) -> int:
 def cmd_memory_compact(args: argparse.Namespace) -> int:
     root = _ensure_root(args)
     print(json.dumps(compact_cards(root), indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_skill(args: argparse.Namespace) -> int:
+    root = _ensure_root(args)
+    ensure_state(root)
+    if args.skill_cmd == "add":
+        obj = add_skill(root, args.name, args.bucket, args.recipe, status=args.status)
+        print(json.dumps(obj, indent=2, sort_keys=True))
+        return 0
+    if args.skill_cmd == "promote":
+        obj = promote_skill(root, args.id, status=args.status)
+        if obj is None:
+            print("Skill not found.", file=sys.stderr)
+            return 1
+        print(json.dumps(obj, indent=2, sort_keys=True))
+        return 0
+    rows = list_skills(root, bucket=args.bucket, include_candidates=args.include)
+    print("id | status | bucket | name")
+    for row in rows:
+        print(f"{row['id']} | {row.get('status')} | {row.get('bucket')} | {row.get('name')}")
     return 0
 
 
@@ -618,6 +640,23 @@ def parser() -> argparse.ArgumentParser:
     mc = mem_sub.add_parser("compact")
     add_common(mc)
 
+    sk = sub.add_parser("skill")
+    sk_sub = sk.add_subparsers(dest="skill_cmd", required=True)
+    ska = sk_sub.add_parser("add")
+    add_common(ska)
+    ska.add_argument("--name", required=True)
+    ska.add_argument("--bucket", required=True)
+    ska.add_argument("--recipe", required=True)
+    ska.add_argument("--status", choices=["candidate", "active", "tombstoned"], default="candidate")
+    skl = sk_sub.add_parser("list")
+    add_common(skl)
+    skl.add_argument("--bucket")
+    skl.add_argument("--include", action="store_true")
+    skp = sk_sub.add_parser("promote")
+    add_common(skp)
+    skp.add_argument("id")
+    skp.add_argument("--status", choices=["active", "tombstoned"], default="active")
+
     # proposal subcommands
     prop = sub.add_parser("proposal")
     prop_sub = prop.add_subparsers(dest="prop_cmd", required=True)
@@ -826,6 +865,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_memory_promote(args)
         if args.mem_cmd == "compact":
             return cmd_memory_compact(args)
+    if args.cmd == "skill":
+        return cmd_skill(args)
     # proposal subcommands
     if args.cmd == "proposal":
         if args.prop_cmd == "create":

@@ -560,6 +560,24 @@ export default function(pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "TauSkillList",
+    label: "Tau Skill List",
+    description: "List reusable Tau workflow skills/recipes for this bucket.",
+    parameters: Type.Object({
+      bucket: Type.Optional(Type.String()),
+      include: Type.Optional(Type.Boolean()),
+      cwd: Type.Optional(Type.String())
+    }),
+    async execute(_callId, params) {
+      const cwd = params.cwd ? resolve(String(params.cwd)) : process.cwd();
+      const args = ["skill", "list", "--cwd", cwd];
+      if (params.bucket) args.push("--bucket", String(params.bucket));
+      if (params.include) args.push("--include");
+      return textResult(runTau(args, cwd).text);
+    }
+  });
+
+  pi.registerTool({
     name: "TauEvalCaseSeed",
     label: "Tau Eval Case Seed",
     description: "Seed Tau's 36-case local eval skeleton.",
@@ -634,6 +652,7 @@ export default function(pi: ExtensionAPI) {
         "- TauDiff: record observed git diff",
         "- TauCacheGet: lookup replay cache",
         "- TauEvalCaseList: list local eval cases",
+        "- TauSkillList: list reusable workflow skills",
         "- TauEvalCaseSeed: seed 36 local eval skeleton cases",
         "- TauEffectList: list recent boundary effects",
         "- TauSubagentAdvise: ROI gate for subagents",

@@ -54,6 +54,7 @@ TauReviewer
 TauDiff
 TauCacheGet
 TauEvalCaseList
+TauSkillList
 TauEvalCaseSeed
 TauEffectList
 TauSubagentAdvise
@@ -138,4 +139,6 @@ python -m tau_cli.main eval-case add --id fix-001 --prompt "fix failing test" --
 python -m tau_cli.main eval-case seed
 python -m tau_cli.main effect list
 python -m tau_cli.main subagent advise --bucket fix-test
+python -m tau_cli.main skill add --name "Fix pytest" --bucket failing-test --recipe "Run targeted pytest, inspect failure, patch, rerun."
+python -m tau_cli.main skill list --bucket failing-test --include
 ```

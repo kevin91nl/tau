@@ -22,6 +22,7 @@ Verified smoke commands for bare Pi and the Tau context pack.
 | 14 | `python -m tau_cli.main eval-case seed` | Seed 36-case eval skeleton. |
 | 15 | `python -m tau_cli.main subagent advise --bucket b` | Check subagent ROI gate. |
 | 16 | `python -m tau_cli.main effect list` | List boundary effects. |
+| 17 | `python -m tau_cli.main skill add --name "Fix pytest" --bucket failing-test --recipe "Run targeted pytest"` | Store reusable workflow skill. |
 
 ## Unit Tests
 
