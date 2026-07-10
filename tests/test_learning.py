@@ -25,6 +25,15 @@ class LearningTests(unittest.TestCase):
             result = learn_policy(root, "fix")
             self.assertEqual(result["policy"]["buckets"]["fix"]["selected_mode"], "current")
 
+    def test_advice_explores_candidate_after_current_data(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            record_measurement(root, "fix", "current", True, input_tokens=1000, output_tokens=200, time_to_acceptance_s=100)
+            learn_policy(root, "fix")
+            rec = advise(root, "fix")
+            self.assertEqual(rec["selected_mode"], "candidate")
+            self.assertEqual(rec["reason"]["status"], "explore_candidate")
+
 
 if __name__ == "__main__":
     unittest.main()

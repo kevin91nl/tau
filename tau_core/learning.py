@@ -69,6 +69,13 @@ def advise(root: Path, bucket: str, scope: str = ".") -> dict:
     policy = _load_policy(root)
     rec = policy.get("buckets", {}).get(bucket)
     mode = (rec or {}).get("selected_mode", "current")
+    reason = (rec or {}).get("reason", {"status": "no learned policy yet"})
+    stats = (rec or {}).get("stats", {})
+    current_n = (stats.get("current") or {}).get("n", 0)
+    candidate_n = (stats.get("candidate") or {}).get("n", 0)
+    if mode == "current" and current_n >= 1 and candidate_n < 3:
+        mode = "candidate"
+        reason = {"status": "explore_candidate", "current_n": current_n, "candidate_n": candidate_n}
     limits = {
         "baseline": {"context": "normal", "max_files": 24, "max_context_chars": 60000},
         "current": {"context": "compact", "max_files": 16, "max_context_chars": 40000},
@@ -84,7 +91,7 @@ def advise(root: Path, bucket: str, scope: str = ".") -> dict:
             "Record TauMeasureRecord after user acceptance.",
             "Run TauLearn after each 3-5 accepted runs in this bucket.",
         ],
-        "reason": (rec or {}).get("reason", {"status": "no learned policy yet"}),
+        "reason": reason,
     }
 
 
